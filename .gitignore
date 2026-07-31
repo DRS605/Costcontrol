@@ -1,0 +1,9 @@
+__pycache__/
+*.pyc
+*.db
+costcontrol.db
+.venv/
+venv/
+env/
+.DS_Store
+*.egg-info/

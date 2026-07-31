@@ -1,0 +1,103 @@
+{% extends "base.html" %}
+{% block title %}Proyectos · CostControl{% endblock %}
+{% block body %}
+<h1>Proyectos</h1>
+<p class="subtitle">Centros de imputación analítica. Los <b>drivers</b> permiten repartos ponderados (p. ej. superficie, horas).</p>
+
+<div class="split">
+  <div class="card">
+    <h2>Listado</h2>
+    {% if proyectos %}
+    <div class="table-wrap">
+    <table>
+      <thead><tr><th>Código</th><th>Nombre</th><th class="num">Presupuesto</th><th class="num">Imputado</th><th>Drivers</th><th></th></tr></thead>
+      <tbody>
+      {% for p in proyectos %}
+        {% set r = resumen.get(p.id) %}
+        <tr>
+          <td><b>{{ p.codigo }}</b> {% if not p.activo %}<span class="badge pendiente">inactivo</span>{% endif %}</td>
+          <td>{{ p.nombre }}</td>
+          <td class="num">{{ p.presupuesto | eur }}</td>
+          <td class="num">{{ (r.imputado if r else 0) | eur }}</td>
+          <td class="small muted">{% for k,v in p.drivers.items() %}{{ k }}={{ v }}{% if not loop.last %}, {% endif %}{% endfor %}</td>
+          <td class="right">
+            <button class="btn sec sm" onclick='editarProyecto({{ p | tojson }})'>Editar</button>
+          </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    </div>
+    {% else %}
+    <div class="empty">No hay proyectos todavía. Crea uno o <a href="{{ url_for('importar') }}">impórtalos por Excel</a>.</div>
+    {% endif %}
+  </div>
+
+  <div class="card">
+    <h2 id="form-title">Nuevo proyecto</h2>
+    <form method="post" action="{{ url_for('proyectos_guardar') }}" id="proy-form">
+      <input type="hidden" name="id" id="p-id">
+      <div class="form-row">
+        <div><label>Código *</label><input name="codigo" id="p-codigo" required placeholder="PROY-A"></div>
+        <div><label>Presupuesto (€)</label><input name="presupuesto" id="p-presupuesto" placeholder="150000"></div>
+      </div>
+      <label>Nombre</label><input name="nombre" id="p-nombre" placeholder="Reforma Nave Norte">
+      <label>Descripción</label><textarea name="descripcion" id="p-descripcion" rows="2"></textarea>
+      <label><input type="checkbox" name="activo" id="p-activo" checked style="width:auto"> Activo</label>
+
+      <label>Drivers / claves de reparto</label>
+      <p class="small muted" style="margin:0 0 6px">Valores para repartos ponderados. Ej.: <code>superficie = 100</code>.</p>
+      <div id="drivers"></div>
+      <button type="button" class="btn sec sm" onclick="addDriver()">+ Añadir driver</button>
+
+      <div class="actions" style="margin-top:16px">
+        <button class="btn accent" type="submit">Guardar</button>
+        <button class="btn sec" type="button" onclick="resetForm()">Limpiar</button>
+        <button class="btn danger sm" type="button" id="btn-borrar" style="display:none" onclick="borrarProyecto()">Eliminar</button>
+      </div>
+    </form>
+    <form method="post" id="del-form" style="display:none"></form>
+  </div>
+</div>
+
+{% block scripts %}
+<script>
+function addDriver(clave='', valor=''){
+  const div = document.createElement('div');
+  div.className = 'inline-form';
+  div.style.marginBottom = '6px';
+  div.innerHTML = `<input name="driver_clave" placeholder="superficie" value="${clave}" style="flex:1">
+    <input name="driver_valor" placeholder="100" value="${valor}" style="width:120px">
+    <button type="button" class="btn sec sm" onclick="this.parentNode.remove()">✕</button>`;
+  document.getElementById('drivers').appendChild(div);
+}
+function resetForm(){
+  document.getElementById('proy-form').reset();
+  document.getElementById('p-id').value='';
+  document.getElementById('drivers').innerHTML='';
+  document.getElementById('form-title').textContent='Nuevo proyecto';
+  document.getElementById('btn-borrar').style.display='none';
+}
+function editarProyecto(p){
+  resetForm();
+  document.getElementById('form-title').textContent='Editar '+p.codigo;
+  document.getElementById('p-id').value=p.id;
+  document.getElementById('p-codigo').value=p.codigo;
+  document.getElementById('p-nombre').value=p.nombre||'';
+  document.getElementById('p-descripcion').value=p.descripcion||'';
+  document.getElementById('p-presupuesto').value=p.presupuesto||'';
+  document.getElementById('p-activo').checked = !!p.activo;
+  for(const [k,v] of Object.entries(p.drivers||{})) addDriver(k,v);
+  document.getElementById('btn-borrar').style.display='inline-block';
+  window.scrollTo({top:0, behavior:'smooth'});
+}
+function borrarProyecto(){
+  const id = document.getElementById('p-id').value;
+  if(!id || !confirm('¿Eliminar este proyecto? Sus repartos quedarán sin proyecto asignado.')) return;
+  const f = document.getElementById('del-form');
+  f.action = '/proyectos/'+id+'/borrar';
+  f.submit();
+}
+</script>
+{% endblock %}
+{% endblock %}

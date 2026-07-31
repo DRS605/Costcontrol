@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}CostControl{% endblock %}</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand"><span class="logo">C</span> CostControl</div>
+    <nav class="main">
+      {% set ep = request.endpoint or '' %}
+      <a href="{{ url_for('index') }}" class="{{ 'active' if ep=='index' }}">Panel</a>
+      <a href="{{ url_for('documentos') }}" class="{{ 'active' if ep and ep.startswith('documento') }}">Documentos</a>
+      <a href="{{ url_for('proyectos') }}" class="{{ 'active' if ep and ep.startswith('proyectos') }}">Proyectos</a>
+      <a href="{{ url_for('centros') }}" class="{{ 'active' if ep and ep.startswith('centros') }}">Centros</a>
+      <a href="{{ url_for('cuentas') }}" class="{{ 'active' if ep and ep.startswith('cuentas') }}">Cuentas</a>
+      <a href="{{ url_for('importar') }}" class="{{ 'active' if ep=='importar' }}">Importar</a>
+      <a href="{{ url_for('informe') }}" class="{{ 'active' if ep and ep.startswith('informe') }}">Informe</a>
+    </nav>
+  </header>
+  <div class="wrap">
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% for cat, msg in messages %}
+        <div class="flash {{ cat }}">{{ msg }}</div>
+      {% endfor %}
+    {% endwith %}
+    {% block body %}{% endblock %}
+  </div>
+  <footer>CostControl v{{ version }} · control de costes por proyectos y estructuras de gasto</footer>
+  {% block scripts %}{% endblock %}
+</body>
+</html>

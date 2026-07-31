@@ -1,0 +1,89 @@
+{% extends "base.html" %}
+{% block title %}Importar · CostControl{% endblock %}
+{% block body %}
+<h1>Importar desde Excel</h1>
+<p class="subtitle">Sube facturas, albaranes, apuntes contables o maestros. CostControl detecta las columnas automáticamente.</p>
+
+<div class="split">
+  <div class="card">
+    <h2>Subir archivo</h2>
+    <form method="post" enctype="multipart/form-data" id="imp-form">
+      <label>¿Qué vas a importar?</label>
+      <select name="destino" id="destino">
+        <option value="documentos">Documentos (facturas / albaranes / apuntes)</option>
+        <option value="proyectos">Proyectos</option>
+        <option value="centros">Centros de coste/beneficio</option>
+        <option value="cuentas">Cuentas contables</option>
+      </select>
+
+      <div id="tipo-defecto-box">
+        <label>Tipo por defecto (si la columna «Tipo» está vacía)</label>
+        <select name="tipo_defecto">
+          <option value="factura">Factura</option>
+          <option value="albaran">Albarán</option>
+          <option value="apunte">Apunte contable</option>
+        </select>
+      </div>
+
+      <label>Archivo Excel (.xlsx)</label>
+      <input type="file" name="archivo" id="archivo" accept=".xlsx,.xlsm" required>
+
+      <div class="actions" style="margin-top:16px">
+        <button type="button" class="btn sec" id="btn-prev">Previsualizar</button>
+        <button type="submit" class="btn accent">Importar</button>
+      </div>
+    </form>
+    <div id="preview"></div>
+  </div>
+
+  <div class="card">
+    <h2>Plantillas de ejemplo</h2>
+    <p class="small muted">Descarga una plantilla, rellénala y súbela.</p>
+    <div class="actions" style="flex-direction:column; align-items:stretch; gap:8px">
+      <a class="btn sec" href="{{ url_for('plantilla', clase='documentos') }}">⬇ Plantilla de documentos</a>
+      <a class="btn sec" href="{{ url_for('plantilla', clase='proyectos') }}">⬇ Plantilla de proyectos</a>
+      <a class="btn sec" href="{{ url_for('plantilla', clase='centros') }}">⬇ Plantilla de centros</a>
+      <a class="btn sec" href="{{ url_for('plantilla', clase='cuentas') }}">⬇ Plantilla de cuentas</a>
+    </div>
+    <div class="tag-help" style="margin-top:16px">
+      <b>Columnas reconocidas en documentos</b>
+      <p style="margin:6px 0 0">Tipo, Número, Fecha, Tercero/Proveedor, Concepto, <b>Importe</b> (obligatoria), Cuenta, Centro. Se aceptan sinónimos y mayúsculas/acentos. Las cuentas y centros que no existan se crean automáticamente.</p>
+    </div>
+  </div>
+</div>
+
+{% block scripts %}
+<script>
+const destino = document.getElementById('destino');
+const tdBox = document.getElementById('tipo-defecto-box');
+destino.addEventListener('change', ()=>{ tdBox.style.display = destino.value==='documentos' ? 'block':'none'; });
+
+document.getElementById('btn-prev').addEventListener('click', async ()=>{
+  const f = document.getElementById('archivo').files[0];
+  if(!f){ alert('Selecciona un archivo primero.'); return; }
+  const fd = new FormData(); fd.append('archivo', f);
+  const box = document.getElementById('preview');
+  box.innerHTML = '<p class="small muted" style="margin-top:12px">Leyendo…</p>';
+  try{
+    const r = await fetch('{{ url_for("importar_previsualizar") }}', {method:'POST', body:fd});
+    const d = await r.json();
+    if(d.error){ box.innerHTML = '<div class="warnbox">'+d.error+'</div>'; return; }
+    let html = `<p class="small muted" style="margin-top:14px">${d.n_rows} fila(s) de datos. Columnas detectadas:</p>`;
+    html += '<div class="pill-examples">';
+    for(const [campo, idx] of Object.entries(d.mapping)){
+      html += `<span class="pill">${campo} → «${d.headers[idx]}»</span>`;
+    }
+    html += '</div>';
+    if(d.sample.length){
+      html += '<div class="table-wrap"><table style="margin-top:12px"><thead><tr>';
+      d.headers.forEach(h=> html += `<th>${h}</th>`);
+      html += '</tr></thead><tbody>';
+      d.sample.forEach(row=>{ html+='<tr>'; row.forEach(c=> html += `<td class="small">${c==null?'':c}</td>`); html+='</tr>'; });
+      html += '</tbody></table></div>';
+    }
+    box.innerHTML = html;
+  }catch(e){ box.innerHTML = '<div class="warnbox">No se pudo leer el archivo.</div>'; }
+});
+</script>
+{% endblock %}
+{% endblock %}

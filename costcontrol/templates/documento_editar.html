@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block title %}{{ 'Editar' if doc else 'Nuevo' }} documento · CostControl{% endblock %}
+{% block body %}
+<h1>{{ 'Editar documento' if doc else 'Nuevo documento' }}</h1>
+<p class="subtitle">Datos de la factura, albarán o apunte contable.</p>
+
+<div class="card" style="max-width:760px">
+  <form method="post">
+    <div class="form-row three">
+      <div><label>Tipo</label>
+        <select name="tipo">
+          {% for t in ['factura','albaran','apunte'] %}
+          <option value="{{ t }}" {{ 'selected' if doc and doc.tipo==t }}>{{ t|capitalize }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div><label>Número</label><input name="numero" value="{{ doc.numero if doc }}" placeholder="F-2026/001"></div>
+      <div><label>Fecha</label><input name="fecha" type="date" value="{{ doc.fecha if doc }}"></div>
+    </div>
+    <div class="form-row">
+      <div><label>Tercero (proveedor/cliente)</label><input name="tercero" value="{{ doc.tercero if doc }}"></div>
+      <div><label>Importe (€) *</label><input name="importe" required value="{{ doc.importe if doc }}" placeholder="3630.50"></div>
+    </div>
+    <label>Concepto</label><input name="concepto" value="{{ doc.concepto if doc }}">
+    <div class="form-row">
+      <div><label>Cuenta contable</label>
+        <select name="cuenta_id">
+          <option value="">— sin cuenta —</option>
+          {% for c in cuentas %}<option value="{{ c.id }}" {{ 'selected' if doc and doc.cuenta_id==c.id }}>{{ c.codigo }} · {{ c.nombre }}</option>{% endfor %}
+        </select>
+      </div>
+      <div><label>Centro de coste/beneficio</label>
+        <select name="centro_id">
+          <option value="">— sin centro —</option>
+          {% for c in centros %}<option value="{{ c.id }}" {{ 'selected' if doc and doc.centro_id==c.id }}>{{ c.codigo }} · {{ c.nombre }}</option>{% endfor %}
+        </select>
+      </div>
+    </div>
+    <label>Notas</label><textarea name="notas" rows="2">{{ doc.notas if doc }}</textarea>
+    <div class="actions" style="margin-top:18px">
+      <button class="btn accent" type="submit">Guardar y repartir</button>
+      <a href="{{ url_for('documentos') }}" class="btn sec">Cancelar</a>
+      {% if doc %}
+      <form method="post" action="{{ url_for('documento_borrar', did=doc.id) }}" onsubmit="return confirm('¿Eliminar documento y su reparto?')" style="margin-left:auto">
+        <button class="btn danger sm">Eliminar</button>
+      </form>
+      {% endif %}
+    </div>
+  </form>
+</div>
+{% endblock %}

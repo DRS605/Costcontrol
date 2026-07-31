@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+{% block title %}Panel · CostControl{% endblock %}
+{% block body %}
+<h1>Panel de control</h1>
+<p class="subtitle">Visión general de costes, documentos y reparto analítico.</p>
+
+<div class="grid kpi">
+  <div class="kpi-card accent">
+    <div class="label">Importe total</div>
+    <div class="value">{{ tot.total | eur }}</div>
+  </div>
+  <div class="kpi-card">
+    <div class="label">Documentos</div>
+    <div class="value">{{ tot.n_docs }}</div>
+  </div>
+  <div class="kpi-card warn">
+    <div class="label">Pendiente de repartir</div>
+    <div class="value">{{ tot.pendiente | eur }}</div>
+  </div>
+  <div class="kpi-card">
+    <div class="label">Docs. pendientes</div>
+    <div class="value">{{ tot.n_pendientes or 0 }}</div>
+  </div>
+</div>
+
+<div class="split">
+  <div class="card">
+    <h2>Coste imputado por proyecto</h2>
+    {% if por_proyecto %}
+    <div class="table-wrap">
+    <table>
+      <thead><tr><th>Proyecto</th><th class="num">Presupuesto</th><th class="num">Imputado</th><th style="width:160px">Consumo</th></tr></thead>
+      <tbody>
+      {% for p in por_proyecto %}
+        {% set pct = (p.imputado / p.presupuesto * 100) if p.presupuesto else 0 %}
+        <tr>
+          <td><a href="{{ url_for('informe') }}#p{{ p.id }}"><b>{{ p.codigo }}</b></a><br><span class="small muted">{{ p.nombre }}</span></td>
+          <td class="num">{{ p.presupuesto | eur }}</td>
+          <td class="num">{{ p.imputado | eur }}</td>
+          <td>
+            <div class="bar"><span class="{{ 'over' if pct > 100 }}" style="width: {{ [pct,100]|min }}%"></span></div>
+            <span class="small muted">{{ '%.0f'|format(pct) }}%</span>
+          </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    </div>
+    {% else %}
+    <div class="empty">Aún no hay proyectos. <a href="{{ url_for('proyectos') }}">Crea el primero</a>.</div>
+    {% endif %}
+  </div>
+
+  <div class="card">
+    <h2>Importe por centro</h2>
+    {% if por_centro %}
+    <div class="table-wrap">
+    <table>
+      <thead><tr><th>Centro</th><th>Tipo</th><th class="num">Importe</th><th class="num">Docs.</th></tr></thead>
+      <tbody>
+      {% for c in por_centro %}
+        <tr>
+          <td><b>{{ c.codigo }}</b><br><span class="small muted">{{ c.nombre }}</span></td>
+          <td><span class="badge {{ c.tipo }}">{{ c.tipo }}</span></td>
+          <td class="num">{{ c.importe | eur }}</td>
+          <td class="num">{{ c.n_docs }}</td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    </div>
+    {% else %}
+    <div class="empty">Sin centros de coste/beneficio todavía.</div>
+    {% endif %}
+  </div>
+</div>
+
+<div class="card">
+  <h2>Primeros pasos</h2>
+  <ol class="small">
+    <li>Crea tus <a href="{{ url_for('proyectos') }}">proyectos</a> y <a href="{{ url_for('centros') }}">centros de coste/beneficio</a> (o impórtalos por Excel).</li>
+    <li><a href="{{ url_for('importar') }}">Importa facturas, albaranes o apuntes contables</a> desde Excel.</li>
+    <li>En cada documento, escribe el reparto <b>a mano</b> (p. ej. <code>60% PROY-A, resto PROY-B</code>) y CostControl lo traduce a líneas analíticas.</li>
+    <li>Consulta el <a href="{{ url_for('informe') }}">informe por proyecto</a> y expórtalo a Excel.</li>
+  </ol>
+</div>
+{% endblock %}

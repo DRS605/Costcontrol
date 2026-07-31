@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+{% block title %}Centros · CostControl{% endblock %}
+{% block body %}
+<h1>Centros de coste / beneficio</h1>
+<p class="subtitle">Estructura de gasto a la que se asocian los documentos importados.</p>
+
+<div class="split">
+  <div class="card">
+    <h2>Listado</h2>
+    {% if centros %}
+    <div class="table-wrap">
+    <table>
+      <thead><tr><th>Código</th><th>Nombre</th><th>Tipo</th><th></th></tr></thead>
+      <tbody>
+      {% for c in centros %}
+        <tr>
+          <td><b>{{ c.codigo }}</b></td>
+          <td>{{ c.nombre }}</td>
+          <td><span class="badge {{ c.tipo }}">{{ c.tipo }}</span></td>
+          <td class="right"><button class="btn sec sm" onclick='editar({{ c | tojson }})'>Editar</button></td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    </div>
+    {% else %}
+    <div class="empty">Sin centros. Crea uno o <a href="{{ url_for('importar') }}">impórtalos</a>.</div>
+    {% endif %}
+  </div>
+
+  <div class="card">
+    <h2 id="form-title">Nuevo centro</h2>
+    <form method="post" action="{{ url_for('centros_guardar') }}" id="c-form">
+      <input type="hidden" name="id" id="c-id">
+      <div class="form-row">
+        <div><label>Código *</label><input name="codigo" id="c-codigo" required placeholder="CC-OBRAS"></div>
+        <div><label>Tipo</label>
+          <select name="tipo" id="c-tipo"><option value="coste">Coste</option><option value="beneficio">Beneficio</option></select>
+        </div>
+      </div>
+      <label>Nombre</label><input name="nombre" id="c-nombre" placeholder="Obras y ejecución">
+      <label>Descripción</label><textarea name="descripcion" id="c-descripcion" rows="2"></textarea>
+      <div class="actions" style="margin-top:16px">
+        <button class="btn accent" type="submit">Guardar</button>
+        <button class="btn sec" type="button" onclick="resetForm()">Limpiar</button>
+        <button class="btn danger sm" type="button" id="btn-borrar" style="display:none" onclick="borrar()">Eliminar</button>
+      </div>
+    </form>
+    <form method="post" id="del-form" style="display:none"></form>
+  </div>
+</div>
+
+{% block scripts %}
+<script>
+function resetForm(){
+  document.getElementById('c-form').reset();
+  document.getElementById('c-id').value='';
+  document.getElementById('form-title').textContent='Nuevo centro';
+  document.getElementById('btn-borrar').style.display='none';
+}
+function editar(c){
+  document.getElementById('form-title').textContent='Editar '+c.codigo;
+  document.getElementById('c-id').value=c.id;
+  document.getElementById('c-codigo').value=c.codigo;
+  document.getElementById('c-nombre').value=c.nombre||'';
+  document.getElementById('c-tipo').value=c.tipo;
+  document.getElementById('c-descripcion').value=c.descripcion||'';
+  document.getElementById('btn-borrar').style.display='inline-block';
+  window.scrollTo({top:0, behavior:'smooth'});
+}
+function borrar(){
+  const id=document.getElementById('c-id').value;
+  if(!id||!confirm('¿Eliminar este centro?'))return;
+  const f=document.getElementById('del-form'); f.action='/centros/'+id+'/borrar'; f.submit();
+}
+</script>
+{% endblock %}
+{% endblock %}

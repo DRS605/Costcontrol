@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+{% block title %}Documentos · CostControl{% endblock %}
+{% block body %}
+<div class="actions" style="justify-content:space-between">
+  <div>
+    <h1>Documentos</h1>
+    <p class="subtitle">Facturas, albaranes y apuntes contables asociados a centros de coste/beneficio.</p>
+  </div>
+  <div class="actions">
+    <a href="{{ url_for('importar') }}" class="btn sec">Importar Excel</a>
+    <a href="{{ url_for('documento_editar') }}" class="btn">+ Nuevo documento</a>
+  </div>
+</div>
+
+<div class="card">
+  <form method="get" class="inline-form" style="margin-bottom:6px">
+    <div><label>Estado</label>
+      <select name="estado" onchange="this.form.submit()">
+        <option value="">Todos</option>
+        <option value="pendiente" {{ 'selected' if filtro.estado=='pendiente' }}>Pendiente</option>
+        <option value="repartido" {{ 'selected' if filtro.estado=='repartido' }}>Repartido</option>
+      </select>
+    </div>
+    <div><label>Tipo</label>
+      <select name="tipo" onchange="this.form.submit()">
+        <option value="">Todos</option>
+        <option value="factura" {{ 'selected' if filtro.tipo=='factura' }}>Factura</option>
+        <option value="albaran" {{ 'selected' if filtro.tipo=='albaran' }}>Albarán</option>
+        <option value="apunte" {{ 'selected' if filtro.tipo=='apunte' }}>Apunte</option>
+      </select>
+    </div>
+    <div><label>Centro</label>
+      <select name="centro" onchange="this.form.submit()">
+        <option value="">Todos</option>
+        {% for c in centros %}<option value="{{ c.id }}" {{ 'selected' if filtro.centro==(c.id|string) }}>{{ c.codigo }}</option>{% endfor %}
+      </select>
+    </div>
+    <a href="{{ url_for('documentos') }}" class="btn sec sm">Quitar filtros</a>
+  </form>
+
+  {% if documentos %}
+  <div class="table-wrap">
+  <table>
+    <thead><tr><th>Tipo</th><th>Número</th><th>Fecha</th><th>Tercero</th><th>Concepto</th><th>Centro</th><th class="num">Importe</th><th>Estado</th><th></th></tr></thead>
+    <tbody>
+    {% for d in documentos %}
+      <tr>
+        <td><span class="badge {{ d.tipo }}">{{ d.tipo }}</span></td>
+        <td><b>{{ d.numero or '—' }}</b></td>
+        <td class="small">{{ d.fecha or '—' }}</td>
+        <td>{{ d.tercero or '—' }}</td>
+        <td class="small muted">{{ d.concepto[:48] }}{{ '…' if d.concepto and d.concepto|length>48 }}</td>
+        <td class="small">{{ d.centro_codigo or '—' }}</td>
+        <td class="num">{{ d.importe | eur }}</td>
+        <td><span class="badge {{ d.estado }}">{{ d.estado }}</span></td>
+        <td class="right actions">
+          <a href="{{ url_for('documento_reparto', did=d.id) }}" class="btn accent sm">Repartir</a>
+          <a href="{{ url_for('documento_editar', did=d.id) }}" class="btn sec sm">Editar</a>
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% else %}
+  <div class="empty">No hay documentos con estos filtros. <a href="{{ url_for('importar') }}">Importa un Excel</a> o <a href="{{ url_for('documento_editar') }}">crea uno</a>.</div>
+  {% endif %}
+</div>
+{% endblock %}

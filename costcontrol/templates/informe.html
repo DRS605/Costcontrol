@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+{% block title %}Informe · CostControl{% endblock %}
+{% block body %}
+<div class="actions" style="justify-content:space-between">
+  <div>
+    <h1>Informe analítico</h1>
+    <p class="subtitle">Coste imputado a cada proyecto tras el reparto, con detalle de líneas.</p>
+  </div>
+  <a href="{{ url_for('informe_exportar') }}" class="btn accent">⬇ Exportar a Excel</a>
+</div>
+
+<div class="card">
+  <h2>Resumen por proyecto</h2>
+  {% if por_proyecto %}
+  <div class="table-wrap">
+  <table>
+    <thead><tr><th>Código</th><th>Proyecto</th><th class="num">Presupuesto</th><th class="num">Imputado</th><th class="num">Desviación</th><th style="width:150px">Consumo</th></tr></thead>
+    <tbody>
+    {% for p in por_proyecto %}
+      {% set pct = (p.imputado / p.presupuesto * 100) if p.presupuesto else 0 %}
+      <tr>
+        <td><b>{{ p.codigo }}</b></td>
+        <td>{{ p.nombre }}</td>
+        <td class="num">{{ p.presupuesto | eur }}</td>
+        <td class="num">{{ p.imputado | eur }}</td>
+        <td class="num" style="color: {{ '#b3261e' if (p.presupuesto and p.imputado>p.presupuesto) else '#2e7d5b' }}">
+          {{ (p.presupuesto - p.imputado) | eur }}</td>
+        <td>
+          <div class="bar"><span class="{{ 'over' if pct>100 }}" style="width: {{ [pct,100]|min }}%"></span></div>
+          <span class="small muted">{{ '%.0f'|format(pct) }}%</span>
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% else %}
+  <div class="empty">Todavía no hay repartos. Importa documentos y repártelos.</div>
+  {% endif %}
+</div>
+
+{% for p in por_proyecto %}
+  {% if detalle.get(p.id) %}
+  <div class="card" id="p{{ p.id }}">
+    <h2>{{ p.codigo }} · {{ p.nombre }} <span class="small muted">— {{ p.imputado | eur }} imputado</span></h2>
+    <div class="table-wrap">
+    <table>
+      <thead><tr><th>Documento</th><th>Fecha</th><th>Tercero</th><th>Concepto</th><th>Centro</th><th class="num">Importe doc.</th><th class="num">%</th><th class="num">Imputado</th></tr></thead>
+      <tbody>
+      {% for d in detalle.get(p.id) %}
+        <tr>
+          <td><span class="badge {{ d.tipo }}">{{ d.tipo }}</span> {{ d.numero or '—' }}</td>
+          <td class="small">{{ d.fecha or '—' }}</td>
+          <td class="small">{{ d.tercero or '—' }}</td>
+          <td class="small muted">{{ d.concepto[:40] }}</td>
+          <td class="small">{{ d.centro_codigo or '—' }}</td>
+          <td class="num small">{{ d.doc_importe | eur }}</td>
+          <td class="num">{{ '%.1f'|format(d.porcentaje) }}%</td>
+          <td class="num"><b>{{ d.importe | eur }}</b></td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    </div>
+  </div>
+  {% endif %}
+{% endfor %}
+
+<div class="card">
+  <h2>Resumen por centro de coste/beneficio</h2>
+  {% if por_centro %}
+  <div class="table-wrap">
+  <table>
+    <thead><tr><th>Código</th><th>Centro</th><th>Tipo</th><th class="num">Importe</th><th class="num">Documentos</th></tr></thead>
+    <tbody>
+    {% for c in por_centro %}
+      <tr>
+        <td><b>{{ c.codigo }}</b></td>
+        <td>{{ c.nombre }}</td>
+        <td><span class="badge {{ c.tipo }}">{{ c.tipo }}</span></td>
+        <td class="num">{{ c.importe | eur }}</td>
+        <td class="num">{{ c.n_docs }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% else %}
+  <div class="empty">Sin centros con documentos.</div>
+  {% endif %}
+</div>
+{% endblock %}

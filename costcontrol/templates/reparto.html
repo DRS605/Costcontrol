@@ -1,0 +1,170 @@
+{% extends "base.html" %}
+{% block title %}Reparto · {{ doc.numero or doc.id }}{% endblock %}
+{% block body %}
+<div class="actions" style="justify-content:space-between">
+  <div>
+    <h1>Reparto analítico</h1>
+    <p class="subtitle">Escribe cómo quieres repartir este documento entre proyectos y CostControl lo traduce.</p>
+  </div>
+  <a href="{{ url_for('documentos') }}" class="btn sec sm">← Volver a documentos</a>
+</div>
+
+<div class="card">
+  <div class="doc-summary">
+    <div><span class="small muted">Documento</span><b><span class="badge {{ doc.tipo }}">{{ doc.tipo }}</span> {{ doc.numero or '—' }}</b></div>
+    <div><span class="small muted">Fecha</span><b>{{ doc.fecha or '—' }}</b></div>
+    <div><span class="small muted">Tercero</span><b>{{ doc.tercero or '—' }}</b></div>
+    <div><span class="small muted">Centro</span><b>{{ doc.centro_codigo or '—' }}</b></div>
+    <div><span class="small muted">Cuenta</span><b>{{ doc.cuenta_codigo or '—' }}</b></div>
+    <div><span class="small muted">Importe total</span><b id="doc-importe" data-importe="{{ doc.importe }}">{{ doc.importe | eur }}</b></div>
+    <div><span class="small muted">Estado</span><b><span class="badge {{ doc.estado }}">{{ doc.estado }}</span></b></div>
+  </div>
+  {% if doc.concepto %}<p class="small muted" style="margin:10px 0 0">{{ doc.concepto }}</p>{% endif %}
+</div>
+
+<div class="split">
+  <div class="card">
+    <h2>Escribe el reparto a mano</h2>
+    <form method="post" action="{{ url_for('reparto_guardar', did=doc.id) }}" id="reparto-form">
+      <textarea name="texto" id="texto" rows="3" placeholder="Ej.: 60% al PROY-A y el resto al PROY-B">{{ texto_previo }}</textarea>
+
+      <div class="pill-examples">
+        <span class="pill" data-fill="60% {{ proyectos[0].codigo if proyectos }}, 40% {{ proyectos[1].codigo if proyectos|length>1 else proyectos[0].codigo if proyectos }}">porcentajes</span>
+        <span class="pill" data-fill="a partes iguales entre {{ proyectos[:3] | map(attribute='codigo') | join(', ') }}">a partes iguales</span>
+        <span class="pill" data-fill="todo a {{ proyectos[0].codigo if proyectos }}">todo a uno</span>
+        <span class="pill" data-fill="1.000 € a {{ proyectos[0].codigo if proyectos }} y el resto a {{ proyectos[1].codigo if proyectos|length>1 else proyectos[0].codigo if proyectos }}">importe fijo + resto</span>
+        <span class="pill" data-fill="según superficie">por driver</span>
+      </div>
+
+      <div class="actions" style="margin-top:14px">
+        <button type="button" class="btn sec" id="btn-preview">Traducir / previsualizar</button>
+        <button type="submit" class="btn accent">Guardar reparto</button>
+      </div>
+      <div id="preview-box"></div>
+    </form>
+
+    {% if reglas %}
+    <h3 style="margin-top:22px">Plantillas de reparto guardadas</h3>
+    <div class="pill-examples">
+      {% for r in reglas %}<span class="pill" data-fill="{{ r.texto }}" title="{{ r.texto }}">{{ r.nombre }}</span>{% endfor %}
+    </div>
+    {% endif %}
+  </div>
+
+  <div>
+    <div class="card">
+      <h2>Proyectos disponibles</h2>
+      {% if proyectos %}
+      <table>
+        <thead><tr><th>Código</th><th>Nombre</th><th>Drivers</th></tr></thead>
+        <tbody>
+        {% for p in proyectos %}
+          <tr>
+            <td><b>{{ p.codigo }}</b></td>
+            <td class="small">{{ p.nombre }}</td>
+            <td class="small muted">{% for k,v in (p.drivers or {}).items() %}{{ k }}={{ v }}{% if not loop.last %}, {% endif %}{% endfor %}</td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+      {% else %}
+      <div class="empty">No hay proyectos activos. <a href="{{ url_for('proyectos') }}">Crea alguno</a>.</div>
+      {% endif %}
+      <div class="tag-help" style="margin-top:14px">
+        <b>Cómo escribir el reparto</b>
+        <ul style="margin:8px 0 0; padding-left:18px">
+          <li><code>60% A, 40% B</code> — porcentajes</li>
+          <li><code>a partes iguales entre A, B, C</code></li>
+          <li><code>todo a A</code> / <code>100% A</code></li>
+          <li><code>1.500 € a A y el resto a B</code> — importes fijos + resto</li>
+          <li><code>por m2: A 100, B 300</code> — pesos explícitos</li>
+          <li><code>según superficie</code> — usa el driver guardado en cada proyecto</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% if repartos %}
+<div class="card">
+  <div class="actions" style="justify-content:space-between">
+    <h2 style="margin:0">Reparto actual guardado</h2>
+    <form method="post" action="{{ url_for('reparto_limpiar', did=doc.id) }}" onsubmit="return confirm('¿Eliminar el reparto guardado?')">
+      <button class="btn danger sm">Eliminar reparto</button>
+    </form>
+  </div>
+  <div class="table-wrap">
+  <table>
+    <thead><tr><th>Proyecto</th><th class="num">%</th><th class="num">Importe</th><th>Criterio</th></tr></thead>
+    <tbody>
+    {% set ns = namespace(t=0) %}
+    {% for r in repartos %}
+      {% set ns.t = ns.t + r.importe %}
+      <tr>
+        <td><b>{{ r.proyecto_codigo }}</b></td>
+        <td class="num">{{ '%.1f'|format(r.porcentaje) }}%</td>
+        <td class="num">{{ r.importe | eur }}</td>
+        <td class="small muted">{{ r.base }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+    <tfoot><tr><th>Total repartido</th><th></th><th class="num">{{ ns.t | eur }}</th><th></th></tr></tfoot>
+  </table>
+  </div>
+</div>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+const did = {{ doc.id }};
+const texto = document.getElementById('texto');
+const previewBox = document.getElementById('preview-box');
+
+function eur(n){ return new Intl.NumberFormat('es-ES',{style:'currency',currency:'EUR'}).format(n); }
+
+document.querySelectorAll('.pill[data-fill]').forEach(el=>{
+  el.addEventListener('click',()=>{ texto.value = el.dataset.fill; preview(); texto.focus(); });
+});
+
+async function preview(){
+  const t = texto.value.trim();
+  if(!t){ previewBox.innerHTML=''; return; }
+  previewBox.innerHTML = '<p class="small muted" style="margin-top:12px">Traduciendo…</p>';
+  try{
+    const resp = await fetch(`/documentos/${did}/reparto/previsualizar`,{
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({texto:t})
+    });
+    const d = await resp.json();
+    render(d);
+  }catch(e){ previewBox.innerHTML = '<div class="warnbox">Error al previsualizar.</div>'; }
+}
+
+function render(d){
+  let html = '';
+  if(d.lineas && d.lineas.length){
+    html += '<table id="preview-lines" style="margin-top:14px"><thead><tr><th>Proyecto</th><th class="num">%</th><th class="num">Importe</th><th>Base</th></tr></thead><tbody>';
+    d.lineas.forEach(l=>{
+      html += `<tr><td><b>${l.proyecto}</b> <span class="small muted">${l.nombre||''}</span></td><td class="num">${l.porcentaje.toFixed(1)}%</td><td class="num">${eur(l.importe)}</td><td class="small muted">${l.base}</td></tr>`;
+    });
+    html += `</tbody><tfoot><tr><th>Repartido (${d.criterio})</th><th></th><th class="num">${eur(d.repartido)}</th><th class="small muted">de ${eur(d.total)}</th></tr></tfoot></table>`;
+  }
+  if(d.explicacion && d.explicacion.length){
+    html += '<div class="okbox"><b>Traducción:</b> ' + d.explicacion.join(' ') + '</div>';
+  }
+  if(d.avisos && d.avisos.length){
+    html += '<div class="warnbox"><b>Avisos:</b> ' + d.avisos.join(' ') + '</div>';
+  }
+  if(!d.ok && (!d.lineas || !d.lineas.length)){
+    html += '<div class="warnbox">No se ha podido interpretar el reparto.</div>';
+  }
+  previewBox.innerHTML = html;
+}
+
+document.getElementById('btn-preview').addEventListener('click', preview);
+let tmr;
+texto.addEventListener('input', ()=>{ clearTimeout(tmr); tmr=setTimeout(preview, 500); });
+if(texto.value.trim()) preview();
+</script>
+{% endblock %}
