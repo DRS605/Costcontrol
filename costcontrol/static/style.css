@@ -1,17 +1,19 @@
 :root {
-  --bg: #f4f6f9;
+  --bg: #f4f6f7;
   --panel: #ffffff;
-  --ink: #1c2733;
-  --muted: #66788a;
-  --line: #e3e8ef;
-  --brand: #1f3a5f;
-  --brand-2: #2f6f9f;
-  --accent: #e8a13a;
-  --ok: #2e7d5b;
-  --ok-bg: #e4f4ec;
+  --ink: #16181c;
+  --muted: #6b7480;
+  --line: #e4e7ea;
+  --brand: #101211;            /* negro corporativo */
+  --brand-2: #5c9c12;          /* verde legible sobre blanco (enlaces/texto) */
+  --lime: #8fdc1f;             /* verde lima corporativo */
+  --lime-dark: #6fb015;        /* lima oscurecido (hover) */
+  --accent: #8fdc1f;
+  --ok: #4f9a10;
+  --ok-bg: #eef8dd;
   --err: #b3261e;
   --err-bg: #fbe6e5;
-  --shadow: 0 1px 3px rgba(20,40,70,.08), 0 4px 16px rgba(20,40,70,.05);
+  --shadow: 0 1px 3px rgba(15,20,15,.08), 0 4px 16px rgba(15,20,15,.05);
   --radius: 10px;
 }
 * { box-sizing: border-box; }
@@ -37,18 +39,17 @@ header.topbar {
   position: sticky; top: 0; z-index: 50;
   box-shadow: var(--shadow);
 }
-.brand { font-weight: 700; font-size: 18px; letter-spacing: .3px; display:flex; align-items:center; gap:9px; }
-.brand .logo {
-  background: var(--accent); color: var(--brand);
-  width: 28px; height: 28px; border-radius: 7px;
-  display: grid; place-items: center; font-weight: 800; font-size: 15px;
-}
+.brand { font-weight: 800; font-size: 18px; letter-spacing: .5px; display:flex; align-items:center; gap:11px; color:#fff; }
+.brand:hover { text-decoration: none; }
+.brand .logo { width: 32px; height: 32px; display: block; flex: none; }
+.brand .wm-cost { color: #fff; }
+.brand .wm-control { color: var(--lime); }
 nav.main { display: flex; gap: 4px; flex: 1; flex-wrap: wrap; }
 nav.main a {
-  color: #d7e2ee; padding: 8px 13px; border-radius: 7px; font-size: 14px; font-weight: 500;
+  color: #cfd3cf; padding: 8px 13px; border-radius: 7px; font-size: 14px; font-weight: 500;
 }
-nav.main a:hover { background: rgba(255,255,255,.12); text-decoration: none; }
-nav.main a.active { background: rgba(255,255,255,.18); color: #fff; }
+nav.main a:hover { background: rgba(255,255,255,.10); text-decoration: none; color: #fff; }
+nav.main a.active { background: var(--lime); color: #101211; font-weight: 600; }
 
 .wrap { max-width: 1180px; margin: 26px auto; padding: 0 22px; }
 h1 { font-size: 23px; margin: 0 0 4px; }
@@ -93,11 +94,11 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
   display: inline-block; padding: 8px 15px; border-radius: 8px; border: 1px solid transparent;
   font-size: 14px; font-weight: 600; cursor: pointer; background: var(--brand); color: #fff;
 }
-.btn:hover { background: #16324f; text-decoration: none; }
-.btn.sec { background: #fff; color: var(--brand); border-color: var(--line); }
-.btn.sec:hover { background: #f2f5f9; }
-.btn.accent { background: var(--accent); color: #3a2a06; }
-.btn.accent:hover { background: #d8901f; }
+.btn:hover { background: #2c2f2c; text-decoration: none; }
+.btn.sec { background: #fff; color: var(--ink); border-color: var(--line); }
+.btn.sec:hover { background: #f2f5f2; border-color: #d6dbd6; }
+.btn.accent { background: var(--lime); color: #101211; }
+.btn.accent:hover { background: var(--lime-dark); }
 .btn.danger { background: #fff; color: var(--err); border-color: #f0c5c2; }
 .btn.danger:hover { background: var(--err-bg); }
 .btn.sm { padding: 5px 10px; font-size: 13px; }
@@ -129,7 +130,7 @@ textarea { resize: vertical; min-height: 70px; }
   padding: 5px 12px; font-size: 13px; cursor: pointer; }
 .pill:hover { background: #dbe8f6; }
 
-.bar { height: 8px; background: #eef2f7; border-radius: 6px; overflow: hidden; }
+.bar { height: 8px; background: #eef1ee; border-radius: 6px; overflow: hidden; }
 .bar > span { display: block; height: 100%; background: var(--brand-2); }
 .bar > span.over { background: var(--err); }
 
@@ -138,17 +139,19 @@ textarea { resize: vertical; min-height: 70px; }
 /* --- gráficos (una sola serie: azul para magnitud) --- */
 :root {
   --surface-1: #ffffff;
-  --series-1: #2a78d6;
-  --chart-text: #66788a;
-  --chart-value: #1c2733;
+  --series-1: #6fb015;         /* verde corporativo, legible sobre blanco */
+  --series-1-edge: #4f8f10;
+  --chart-text: #6b7480;
+  --chart-value: #16181c;
 }
 @media (prefers-color-scheme: dark) {
   :root:where(:not([data-theme="light"])) {
-    --series-1: #3987e5;
+    --series-1: #8fdc1f;
+    --series-1-edge: #6fb015;
   }
 }
 .chart { display: block; max-width: 100%; height: auto; }
-.chart .chart-bar { fill: var(--series-1); }
+.chart .chart-bar { fill: var(--series-1); stroke: var(--series-1-edge); stroke-width: .75; }
 .chart .chart-label { fill: var(--chart-text); }
 .chart .chart-value { fill: var(--chart-value); font-variant-numeric: tabular-nums; }
 .chart-card { min-height: 60px; }

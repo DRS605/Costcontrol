@@ -4,11 +4,20 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}CostControl{% endblock %}</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 120 120'><rect width='120' height='120' rx='26' fill='%23101211'/><circle cx='60' cy='60' r='42' fill='none' stroke='white' stroke-width='12' stroke-linecap='round' stroke-dasharray='208 56' stroke-dashoffset='28'/><circle cx='60' cy='60' r='25' fill='none' stroke='%238fdc1f' stroke-width='12' stroke-linecap='round' stroke-dasharray='88 70' stroke-dashoffset='20'/></svg>">
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
   <header class="topbar">
-    <div class="brand"><span class="logo">C</span> CostControl</div>
+    <a href="{{ url_for('index') }}" class="brand">
+      <svg class="logo" viewBox="0 0 120 120" aria-hidden="true">
+        <path d="M 97.7 33.6 A 46 46 0 1 0 97.7 86.4" fill="none" stroke="#ffffff"
+              stroke-width="13" stroke-linecap="round"/>
+        <path d="M 79.1 40.9 A 27 27 0 1 0 79.1 79.1" fill="none" stroke="#8fdc1f"
+              stroke-width="13" stroke-linecap="round"/>
+      </svg>
+      <span><span class="wm-cost">COST</span><span class="wm-control">CONTROL</span></span>
+    </a>
     <nav class="main">
       {% set ep = request.endpoint or '' %}
       <a href="{{ url_for('index') }}" class="{{ 'active' if ep=='index' }}">Panel</a>
