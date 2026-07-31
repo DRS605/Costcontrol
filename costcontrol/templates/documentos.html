@@ -7,36 +7,78 @@
     <p class="subtitle">Facturas, albaranes y apuntes contables asociados a centros de coste/beneficio.</p>
   </div>
   <div class="actions">
+    <a href="{{ url_for('documentos_exportar', **request.args) }}" class="btn sec">⬇ Exportar</a>
+    <a href="{{ url_for('reparto_masivo') }}" class="btn accent">Reparto masivo</a>
     <a href="{{ url_for('importar') }}" class="btn sec">Importar Excel</a>
-    <a href="{{ url_for('documento_editar') }}" class="btn">+ Nuevo documento</a>
+    <a href="{{ url_for('documento_editar') }}" class="btn">+ Nuevo</a>
   </div>
 </div>
 
 <div class="card">
-  <form method="get" class="inline-form" style="margin-bottom:6px">
-    <div><label>Estado</label>
-      <select name="estado" onchange="this.form.submit()">
-        <option value="">Todos</option>
-        <option value="pendiente" {{ 'selected' if filtro.estado=='pendiente' }}>Pendiente</option>
-        <option value="repartido" {{ 'selected' if filtro.estado=='repartido' }}>Repartido</option>
-      </select>
+  <form method="get">
+    <div class="form-row three">
+      <div><label>Buscar (número, tercero, concepto)</label><input name="texto" value="{{ filtro.texto }}" placeholder="texto libre…"></div>
+      <div><label>Estado</label>
+        <select name="estado">
+          <option value="">Todos</option>
+          <option value="pendiente" {{ 'selected' if filtro.estado=='pendiente' }}>Pendiente</option>
+          <option value="repartido" {{ 'selected' if filtro.estado=='repartido' }}>Repartido</option>
+        </select>
+      </div>
+      <div><label>Tipo</label>
+        <select name="tipo">
+          <option value="">Todos</option>
+          <option value="factura" {{ 'selected' if filtro.tipo=='factura' }}>Factura</option>
+          <option value="albaran" {{ 'selected' if filtro.tipo=='albaran' }}>Albarán</option>
+          <option value="apunte" {{ 'selected' if filtro.tipo=='apunte' }}>Apunte</option>
+        </select>
+      </div>
     </div>
-    <div><label>Tipo</label>
-      <select name="tipo" onchange="this.form.submit()">
-        <option value="">Todos</option>
-        <option value="factura" {{ 'selected' if filtro.tipo=='factura' }}>Factura</option>
-        <option value="albaran" {{ 'selected' if filtro.tipo=='albaran' }}>Albarán</option>
-        <option value="apunte" {{ 'selected' if filtro.tipo=='apunte' }}>Apunte</option>
-      </select>
+    <div class="form-row three">
+      <div><label>Centro</label>
+        <select name="centro">
+          <option value="">Todos</option>
+          {% for c in centros %}<option value="{{ c.id }}" {{ 'selected' if filtro.centro==(c.id|string) }}>{{ c.codigo }}</option>{% endfor %}
+        </select>
+      </div>
+      <div><label>Cuenta</label>
+        <select name="cuenta">
+          <option value="">Todas</option>
+          {% for c in cuentas %}<option value="{{ c.id }}" {{ 'selected' if filtro.cuenta==(c.id|string) }}>{{ c.codigo }}</option>{% endfor %}
+        </select>
+      </div>
+      <div><label>Ejercicio / periodo</label>
+        <div class="inline-form" style="gap:6px">
+          <select name="ejercicio" style="flex:1">
+            <option value="">Año</option>
+            {% for e in ejercicios %}<option value="{{ e }}" {{ 'selected' if filtro.ejercicio==(e|string) }}>{{ e }}</option>{% endfor %}
+          </select>
+          <select name="periodo" style="flex:1">
+            <option value="">Mes</option>
+            {% for i in range(1,13) %}<option value="{{ i }}" {{ 'selected' if filtro.periodo==(i|string) }}>{{ meses[i] }}</option>{% endfor %}
+          </select>
+        </div>
+      </div>
     </div>
-    <div><label>Centro</label>
-      <select name="centro" onchange="this.form.submit()">
-        <option value="">Todos</option>
-        {% for c in centros %}<option value="{{ c.id }}" {{ 'selected' if filtro.centro==(c.id|string) }}>{{ c.codigo }}</option>{% endfor %}
-      </select>
+    <div class="form-row three">
+      <div><label>Fecha desde</label><input type="date" name="desde" value="{{ filtro.desde }}"></div>
+      <div><label>Fecha hasta</label><input type="date" name="hasta" value="{{ filtro.hasta }}"></div>
+      <div><label>Importe (mín / máx)</label>
+        <div class="inline-form" style="gap:6px">
+          <input name="min" value="{{ filtro.min }}" placeholder="mín" style="flex:1">
+          <input name="max" value="{{ filtro.max }}" placeholder="máx" style="flex:1">
+        </div>
+      </div>
     </div>
-    <a href="{{ url_for('documentos') }}" class="btn sec sm">Quitar filtros</a>
+    <div class="actions" style="margin-top:12px">
+      <button class="btn" type="submit">Filtrar</button>
+      <a href="{{ url_for('documentos') }}" class="btn sec sm">Quitar filtros</a>
+      <span class="muted small" style="margin-left:auto">{{ documentos|length }} documento(s) · <b>{{ total_filtrado | eur }}</b></span>
+    </div>
   </form>
+</div>
+
+<div class="card">
 
   {% if documentos %}
   <div class="table-wrap">

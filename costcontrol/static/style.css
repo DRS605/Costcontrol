@@ -134,6 +134,24 @@ textarea { resize: vertical; min-height: 70px; }
 .bar > span.over { background: var(--err); }
 
 .empty { text-align: center; color: var(--muted); padding: 34px; }
+
+/* --- gráficos (una sola serie: azul para magnitud) --- */
+:root {
+  --surface-1: #ffffff;
+  --series-1: #2a78d6;
+  --chart-text: #66788a;
+  --chart-value: #1c2733;
+}
+@media (prefers-color-scheme: dark) {
+  :root:where(:not([data-theme="light"])) {
+    --series-1: #3987e5;
+  }
+}
+.chart { display: block; max-width: 100%; height: auto; }
+.chart .chart-bar { fill: var(--series-1); }
+.chart .chart-label { fill: var(--chart-text); }
+.chart .chart-value { fill: var(--chart-value); font-variant-numeric: tabular-nums; }
+.chart-card { min-height: 60px; }
 .split { display: grid; grid-template-columns: 1.1fr .9fr; gap: 20px; align-items: start; }
 @media (max-width: 900px) { .split { grid-template-columns: 1fr; } }
 

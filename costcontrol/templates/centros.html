@@ -10,13 +10,14 @@
     {% if centros %}
     <div class="table-wrap">
     <table>
-      <thead><tr><th>Código</th><th>Nombre</th><th>Tipo</th><th></th></tr></thead>
+      <thead><tr><th>Código</th><th>Nombre</th><th>Tipo</th><th>Regla por defecto</th><th></th></tr></thead>
       <tbody>
       {% for c in centros %}
         <tr>
           <td><b>{{ c.codigo }}</b></td>
           <td>{{ c.nombre }}</td>
           <td><span class="badge {{ c.tipo }}">{{ c.tipo }}</span></td>
+          <td class="small muted">{{ c.regla_defecto or '—' }}</td>
           <td class="right"><button class="btn sec sm" onclick='editar({{ c | tojson }})'>Editar</button></td>
         </tr>
       {% endfor %}
@@ -40,6 +41,9 @@
       </div>
       <label>Nombre</label><input name="nombre" id="c-nombre" placeholder="Obras y ejecución">
       <label>Descripción</label><textarea name="descripcion" id="c-descripcion" rows="2"></textarea>
+      <label>Regla de reparto por defecto</label>
+      <input name="regla_defecto" id="c-regla" placeholder="Ej.: a partes iguales entre PROY-A, PROY-B">
+      <p class="small muted" style="margin:4px 0 0">Se aplica automáticamente al importar documentos de este centro.</p>
       <div class="actions" style="margin-top:16px">
         <button class="btn accent" type="submit">Guardar</button>
         <button class="btn sec" type="button" onclick="resetForm()">Limpiar</button>
@@ -65,6 +69,7 @@ function editar(c){
   document.getElementById('c-nombre').value=c.nombre||'';
   document.getElementById('c-tipo').value=c.tipo;
   document.getElementById('c-descripcion').value=c.descripcion||'';
+  document.getElementById('c-regla').value=c.regla_defecto||'';
   document.getElementById('btn-borrar').style.display='inline-block';
   window.scrollTo({top:0, behavior:'smooth'});
 }

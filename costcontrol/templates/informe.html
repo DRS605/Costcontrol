@@ -6,8 +6,18 @@
     <h1>Informe analítico</h1>
     <p class="subtitle">Coste imputado a cada proyecto tras el reparto, con detalle de líneas.</p>
   </div>
-  <a href="{{ url_for('informe_exportar') }}" class="btn accent">⬇ Exportar a Excel</a>
+  <div class="actions">
+    <a href="{{ url_for('backup') }}" class="btn sec">⬇ Copia de seguridad</a>
+    <a href="{{ url_for('informe_exportar') }}" class="btn accent">⬇ Exportar a Excel</a>
+  </div>
 </div>
+
+{% if graf_proyecto or graf_cuenta %}
+<div class="grid cols2">
+  <div class="card chart-card"><h2>Imputado por proyecto</h2>{{ graf_proyecto | safe }}</div>
+  <div class="card chart-card"><h2>Coste por cuenta contable</h2>{{ graf_cuenta | safe }}</div>
+</div>
+{% endif %}
 
 <div class="card">
   <h2>Resumen por proyecto</h2>
@@ -87,6 +97,30 @@
   </div>
   {% else %}
   <div class="empty">Sin centros con documentos.</div>
+  {% endif %}
+</div>
+
+<div class="card">
+  <h2>Resumen por cuenta contable</h2>
+  {% if por_cuenta %}
+  <div class="table-wrap">
+  <table>
+    <thead><tr><th>Código</th><th>Cuenta</th><th>Grupo</th><th class="num">Importe</th><th class="num">Documentos</th></tr></thead>
+    <tbody>
+    {% for c in por_cuenta %}
+      <tr>
+        <td><b>{{ c.codigo }}</b></td>
+        <td>{{ c.nombre }}</td>
+        <td class="small muted">{{ c.grupo }}</td>
+        <td class="num">{{ c.importe | eur }}</td>
+        <td class="num">{{ c.n_docs }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% else %}
+  <div class="empty">Sin cuentas con documentos.</div>
   {% endif %}
 </div>
 {% endblock %}

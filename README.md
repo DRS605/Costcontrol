@@ -31,8 +31,19 @@ herramienta traduce ese texto libre a líneas analíticas concretas.
 
   Cada reparto muestra una **traducción legible** de lo interpretado y avisa si
   algo no cuadra (queda importe sin repartir, se pasa del total, etc.).
-- 📊 **Informe analítico** por proyecto (presupuesto vs. imputado, desviación,
-  detalle de líneas) y por centro, exportable a Excel.
+- ⚡ **Reparto masivo**: aplica una misma regla a muchos documentos a la vez
+  (filtrando por centro, cuenta, periodo, tipo o estado). Ideal para costes
+  indirectos y de estructura.
+- 🔁 **Reglas de reparto reutilizables** y **regla por defecto por centro**: los
+  documentos que importas de un centro con regla se reparten **automáticamente**.
+- 🧾 **Modelo contable real**: IVA (base imponible, cuota y total), ejercicios y
+  periodos, y maestro de **terceros** (proveedores/clientes con NIF).
+- 📊 **Panel con gráficos** (evolución mensual, coste por proyecto y por centro)
+  e **informe analítico** por proyecto (presupuesto vs. imputado, desviación,
+  detalle de líneas), por centro y **por cuenta contable**, exportable a Excel.
+- 🔎 **Búsqueda y filtros avanzados** en documentos (texto, fechas, importe,
+  ejercicio/periodo, centro, cuenta) y **exportación** de la vista filtrada.
+- 💾 **Copia de seguridad** completa en JSON.
 
 ## Instalación y arranque
 
@@ -58,6 +69,17 @@ Abre <http://localhost:5000>. Opciones: `--port=8080`, `--debug`.
    Puedes guardar textos frecuentes como **plantillas de reparto**.
 4. Consulta el **Informe** y expórtalo a Excel.
 
+## Reparto masivo y automatización
+
+- **Reparto masivo** (`Reparto masivo`): filtra los documentos, selecciona los
+  que quieras y aplica una sola regla a todos — cada uno se reparte según su
+  propio importe.
+- **Regla por defecto por centro** (`Centros`): asigna un texto de reparto a un
+  centro y todos los documentos que importes de ese centro quedan repartidos
+  automáticamente al importar.
+- **Reglas** (`Reglas`): guarda textos de reparto frecuentes como plantillas y
+  reutilízalos con un clic en cualquier documento o en el reparto masivo.
+
 ## Repartos ponderados con *drivers*
 
 Cada proyecto puede tener *drivers* (claves de reparto) como `superficie`,
@@ -70,8 +92,9 @@ propio texto: `por m2: PROY-A 100, PROY-B 300`.
 ```
 costcontrol/
   allocation.py   # motor de reparto en lenguaje natural (el núcleo)
-  db.py           # acceso a datos (SQLite, stdlib)
-  importer.py     # importación / exportación Excel (openpyxl)
+  db.py           # acceso a datos (SQLite, stdlib) + migraciones
+  importer.py     # importación / exportación Excel (openpyxl) + backup
+  charts.py       # gráficos SVG en línea (sin dependencias)
   app.py          # aplicación web (Flask) y rutas
   templates/      # interfaz en español
   static/style.css

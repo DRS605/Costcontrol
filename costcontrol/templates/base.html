@@ -13,9 +13,12 @@
       {% set ep = request.endpoint or '' %}
       <a href="{{ url_for('index') }}" class="{{ 'active' if ep=='index' }}">Panel</a>
       <a href="{{ url_for('documentos') }}" class="{{ 'active' if ep and ep.startswith('documento') }}">Documentos</a>
+      <a href="{{ url_for('reparto_masivo') }}" class="{{ 'active' if ep and ep.startswith('reparto_masivo') }}">Reparto masivo</a>
       <a href="{{ url_for('proyectos') }}" class="{{ 'active' if ep and ep.startswith('proyectos') }}">Proyectos</a>
       <a href="{{ url_for('centros') }}" class="{{ 'active' if ep and ep.startswith('centros') }}">Centros</a>
       <a href="{{ url_for('cuentas') }}" class="{{ 'active' if ep and ep.startswith('cuentas') }}">Cuentas</a>
+      <a href="{{ url_for('terceros') }}" class="{{ 'active' if ep and ep.startswith('terceros') }}">Terceros</a>
+      <a href="{{ url_for('reglas') }}" class="{{ 'active' if ep and ep.startswith('reglas') }}">Reglas</a>
       <a href="{{ url_for('importar') }}" class="{{ 'active' if ep=='importar' }}">Importar</a>
       <a href="{{ url_for('informe') }}" class="{{ 'active' if ep and ep.startswith('informe') }}">Informe</a>
     </nav>

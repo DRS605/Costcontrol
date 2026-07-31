@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+{% block title %}Terceros · CostControl{% endblock %}
+{% block body %}
+<h1>Terceros</h1>
+<p class="subtitle">Proveedores y clientes. Se dan de alta automáticamente al importar o crear documentos.</p>
+
+<div class="split">
+  <div class="card">
+    <h2>Listado</h2>
+    {% if terceros %}
+    <div class="table-wrap">
+    <table>
+      <thead><tr><th>Nombre</th><th>NIF/CIF</th><th>Tipo</th><th></th></tr></thead>
+      <tbody>
+      {% for t in terceros %}
+        <tr>
+          <td><b>{{ t.nombre }}</b></td>
+          <td class="small muted">{{ t.nif or '—' }}</td>
+          <td><span class="badge {{ 'beneficio' if t.tipo=='cliente' else 'coste' }}">{{ t.tipo }}</span></td>
+          <td class="right"><button class="btn sec sm" onclick='editar({{ t | tojson }})'>Editar</button></td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    </div>
+    {% else %}
+    <div class="empty">Sin terceros todavía.</div>
+    {% endif %}
+  </div>
+
+  <div class="card">
+    <h2 id="form-title">Nuevo tercero</h2>
+    <form method="post" action="{{ url_for('terceros_guardar') }}" id="t-form">
+      <input type="hidden" name="id" id="t-id">
+      <label>Nombre *</label><input name="nombre" id="t-nombre" required placeholder="Suministros Levante SL">
+      <div class="form-row">
+        <div><label>NIF / CIF</label><input name="nif" id="t-nif" placeholder="B96000001"></div>
+        <div><label>Tipo</label>
+          <select name="tipo" id="t-tipo"><option value="proveedor">Proveedor</option><option value="cliente">Cliente</option></select>
+        </div>
+      </div>
+      <div class="actions" style="margin-top:16px">
+        <button class="btn accent" type="submit">Guardar</button>
+        <button class="btn sec" type="button" onclick="resetForm()">Limpiar</button>
+        <button class="btn danger sm" type="button" id="btn-borrar" style="display:none" onclick="borrar()">Eliminar</button>
+      </div>
+    </form>
+    <form method="post" id="del-form" style="display:none"></form>
+  </div>
+</div>
+
+{% block scripts %}
+<script>
+function resetForm(){
+  document.getElementById('t-form').reset();
+  document.getElementById('t-id').value='';
+  document.getElementById('form-title').textContent='Nuevo tercero';
+  document.getElementById('btn-borrar').style.display='none';
+}
+function editar(t){
+  document.getElementById('form-title').textContent='Editar tercero';
+  document.getElementById('t-id').value=t.id;
+  document.getElementById('t-nombre').value=t.nombre||'';
+  document.getElementById('t-nif').value=t.nif||'';
+  document.getElementById('t-tipo').value=t.tipo;
+  document.getElementById('btn-borrar').style.display='inline-block';
+  window.scrollTo({top:0, behavior:'smooth'});
+}
+function borrar(){
+  const id=document.getElementById('t-id').value;
+  if(!id||!confirm('¿Eliminar este tercero?'))return;
+  const f=document.getElementById('del-form'); f.action='/terceros/'+id+'/borrar'; f.submit();
+}
+</script>
+{% endblock %}
+{% endblock %}

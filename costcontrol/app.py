@@ -10,8 +10,10 @@ from flask import (Flask, Response, abort, flash, redirect, render_template,
                    request, send_file, url_for)
 import io
 
-from . import db, importer
+from . import charts, db, importer
 from .allocation import Allocator, Project, money
+
+MESES = ["", "Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"]
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("COSTCONTROL_SECRET", "costcontrol-dev-secret")
@@ -51,12 +53,28 @@ def inject_globals():
 @app.route("/")
 def index():
     conn = get_conn()
-    tot = db.totales(conn)
+    ejercicio = request.args.get("ejercicio") or None
+    tot = db.totales(conn, ejercicio=ejercicio)
     por_proyecto = db.resumen_por_proyecto(conn)
     por_centro = db.resumen_por_centro(conn)
+    ejercicios_l = db.ejercicios(conn)
+    serie = db.serie_mensual(conn, ejercicio=ejercicio)
     conn.close()
+
+    # gráficos SVG
+    graf_centro = charts.barras_horizontales(
+        [(c["codigo"], c["importe"]) for c in por_centro if c["importe"]][:8])
+    graf_proyecto = charts.barras_horizontales(
+        [(p["codigo"], p["imputado"]) for p in por_proyecto if p["imputado"]][:8])
+    serie_datos = [(MESES[s["periodo"]] if 1 <= (s["periodo"] or 0) <= 12 else str(s["periodo"]),
+                    s["importe"]) for s in serie]
+    graf_mensual = charts.barras_verticales(serie_datos)
+
     return render_template("index.html", tot=tot, por_proyecto=por_proyecto,
-                           por_centro=por_centro)
+                           por_centro=por_centro, ejercicios=ejercicios_l,
+                           ejercicio_sel=ejercicio, graf_centro=graf_centro,
+                           graf_proyecto=graf_proyecto, graf_mensual=graf_mensual,
+                           hay_serie=bool(serie_datos))
 
 
 # --- proyectos ------------------------------------------------------------
@@ -122,6 +140,7 @@ def centros_guardar():
     conn = get_conn()
     db.upsert_centro(conn, f["codigo"].strip(), f.get("nombre", "").strip(),
                      tipo=f.get("tipo", "coste"), descripcion=f.get("descripcion", "").strip(),
+                     regla_defecto=f.get("regla_defecto", "").strip(),
                      cid=int(f["id"]) if f.get("id") else None)
     conn.close()
     flash("Centro guardado.", "ok")
@@ -168,18 +187,50 @@ def cuentas_borrar(cid):
 
 
 # --- documentos -----------------------------------------------------------
+def _doc_filtros():
+    a = request.args
+    return dict(
+        estado=a.get("estado") or None,
+        centro_id=int(a["centro"]) if a.get("centro") else None,
+        tipo=a.get("tipo") or None,
+        cuenta_id=int(a["cuenta"]) if a.get("cuenta") else None,
+        ejercicio=a.get("ejercicio") or None,
+        periodo=a.get("periodo") or None,
+        texto=a.get("texto") or None,
+        fecha_desde=a.get("desde") or None,
+        fecha_hasta=a.get("hasta") or None,
+        importe_min=a.get("min") or None,
+        importe_max=a.get("max") or None,
+    )
+
+
 @app.route("/documentos")
 def documentos():
-    estado = request.args.get("estado") or None
-    centro_id = request.args.get("centro") or None
-    tipo = request.args.get("tipo") or None
     conn = get_conn()
-    data = db.list_documentos(conn, estado=estado,
-                              centro_id=int(centro_id) if centro_id else None, tipo=tipo)
+    filtros = _doc_filtros()
+    data = db.list_documentos(conn, **filtros)
     centros_l = db.list_centros(conn)
+    cuentas_l = db.list_cuentas(conn)
+    ejercicios_l = db.ejercicios(conn)
     conn.close()
+    total_filtrado = sum(d["importe"] or 0 for d in data)
     return render_template("documentos.html", documentos=data, centros=centros_l,
-                           filtro={"estado": estado, "centro": centro_id, "tipo": tipo})
+                           cuentas=cuentas_l, ejercicios=ejercicios_l, meses=MESES,
+                           filtro={k: (request.args.get(k) or "") for k in
+                                   ["estado", "centro", "tipo", "cuenta", "ejercicio",
+                                    "periodo", "texto", "desde", "hasta", "min", "max"]},
+                           total_filtrado=total_filtrado)
+
+
+@app.route("/documentos/exportar")
+def documentos_exportar():
+    conn = get_conn()
+    data = db.list_documentos(conn, **_doc_filtros())
+    xlsx = importer.export_documentos(conn, data)
+    conn.close()
+    return send_file(io.BytesIO(xlsx), as_attachment=True,
+                     download_name="documentos_costcontrol.xlsx",
+                     mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
 
 @app.route("/documentos/nuevo", methods=["GET", "POST"])
@@ -191,13 +242,19 @@ def documento_editar(did=None):
         def parse_imp(v):
             from .allocation import parse_number
             return float(parse_number(v) or 0)
+        tercero_txt = f.get("tercero", "").strip()
+        tercero_id = None
+        if tercero_txt:
+            tercero_id = db.upsert_tercero(conn, tercero_txt)
         payload = dict(
             tipo=f.get("tipo", "factura"),
             numero=f.get("numero", "").strip(),
             fecha=f.get("fecha", "").strip(),
-            tercero=f.get("tercero", "").strip(),
+            tercero=tercero_txt,
+            tercero_id=tercero_id,
             concepto=f.get("concepto", "").strip(),
             importe=parse_imp(f.get("importe", "0")),
+            iva_pct=parse_imp(f.get("iva_pct", "0")),
             cuenta_id=int(f["cuenta_id"]) if f.get("cuenta_id") else None,
             centro_id=int(f["centro_id"]) if f.get("centro_id") else None,
             notas=f.get("notas", "").strip(),
@@ -216,8 +273,10 @@ def documento_editar(did=None):
         abort(404)
     cuentas_l = db.list_cuentas(conn)
     centros_l = db.list_centros(conn)
+    terceros_l = db.list_terceros(conn)
     conn.close()
-    return render_template("documento_editar.html", doc=doc, cuentas=cuentas_l, centros=centros_l)
+    return render_template("documento_editar.html", doc=doc, cuentas=cuentas_l,
+                           centros=centros_l, terceros=terceros_l)
 
 
 @app.route("/documentos/<int:did>/borrar", methods=["POST"])
@@ -313,17 +372,125 @@ def reparto_limpiar(did):
     return redirect(url_for("documento_reparto", did=did))
 
 
-# --- reglas guardadas -----------------------------------------------------
+# --- reglas de reparto (plantillas gestionables) --------------------------
+@app.route("/reglas")
+def reglas():
+    conn = get_conn()
+    data = db.list_reglas(conn)
+    proyectos_l = db.list_proyectos(conn, solo_activos=True)
+    conn.close()
+    return render_template("reglas.html", reglas=data, proyectos=proyectos_l)
+
+
 @app.route("/reglas/guardar", methods=["POST"])
 def reglas_guardar():
     f = request.form
     conn = get_conn()
-    with conn:
-        conn.execute("INSERT INTO reglas (nombre, texto) VALUES (?,?)",
-                     (f.get("nombre", "").strip() or "Regla", f.get("texto", "").strip()))
+    db.upsert_regla(conn, f.get("nombre", "").strip() or "Regla",
+                    f.get("texto", "").strip(),
+                    rid=int(f["id"]) if f.get("id") else None)
     conn.close()
-    flash("Regla de reparto guardada como plantilla.", "ok")
-    return redirect(request.referrer or url_for("index"))
+    flash("Regla de reparto guardada.", "ok")
+    return redirect(request.referrer or url_for("reglas"))
+
+
+@app.route("/reglas/<int:rid>/borrar", methods=["POST"])
+def reglas_borrar(rid):
+    conn = get_conn()
+    db.delete_regla(conn, rid)
+    conn.close()
+    flash("Regla eliminada.", "ok")
+    return redirect(url_for("reglas"))
+
+
+# --- terceros -------------------------------------------------------------
+@app.route("/terceros")
+def terceros():
+    conn = get_conn()
+    data = db.list_terceros(conn)
+    conn.close()
+    return render_template("terceros.html", terceros=data)
+
+
+@app.route("/terceros/guardar", methods=["POST"])
+def terceros_guardar():
+    f = request.form
+    conn = get_conn()
+    db.upsert_tercero(conn, f["nombre"].strip(), nif=f.get("nif", "").strip(),
+                      tipo=f.get("tipo", "proveedor"),
+                      tid=int(f["id"]) if f.get("id") else None)
+    conn.close()
+    flash("Tercero guardado.", "ok")
+    return redirect(url_for("terceros"))
+
+
+@app.route("/terceros/<int:tid>/borrar", methods=["POST"])
+def terceros_borrar(tid):
+    conn = get_conn()
+    db.delete_tercero(conn, tid)
+    conn.close()
+    flash("Tercero eliminado.", "ok")
+    return redirect(url_for("terceros"))
+
+
+# --- REPARTO MASIVO -------------------------------------------------------
+@app.route("/reparto-masivo", methods=["GET"])
+def reparto_masivo():
+    conn = get_conn()
+    filtros = _doc_filtros()
+    filtro_display = {k: (request.args.get(k) or "") for k in
+                      ["estado", "centro", "tipo", "cuenta", "ejercicio", "periodo"]}
+    if not any(filtros.values()):
+        filtros["estado"] = "pendiente"
+        filtro_display["estado"] = "pendiente"
+    docs = db.list_documentos(conn, **filtros)
+    centros_l = db.list_centros(conn)
+    cuentas_l = db.list_cuentas(conn)
+    ejercicios_l = db.ejercicios(conn)
+    proyectos_l = db.list_proyectos(conn, solo_activos=True)
+    reglas_l = db.list_reglas(conn)
+    conn.close()
+    total = sum(d["importe"] or 0 for d in docs)
+    return render_template("reparto_masivo.html", documentos=docs, centros=centros_l,
+                           cuentas=cuentas_l, ejercicios=ejercicios_l, meses=MESES,
+                           proyectos=proyectos_l, reglas=reglas_l, total=total,
+                           filtro=filtro_display)
+
+
+@app.route("/reparto-masivo/aplicar", methods=["POST"])
+def reparto_masivo_aplicar():
+    conn = get_conn()
+    texto = request.form.get("texto", "")
+    ids = [int(x) for x in request.form.getlist("doc_ids") if x]
+    if not ids or not texto.strip():
+        conn.close()
+        flash("Selecciona documentos y escribe una regla de reparto.", "error")
+        return redirect(request.referrer or url_for("reparto_masivo"))
+    projects = _projects_for_allocator(conn)
+    allocator = Allocator(projects)
+    cod2id = {p["codigo"]: p["id"] for p in db.list_proyectos(conn)}
+    docs = db.list_documentos(conn, ids=ids)
+    aplicados, fallidos = 0, 0
+    for d in docs:
+        res = allocator.allocate(d["importe"], texto)
+        if res.ok and res.lines:
+            lines = [{
+                "proyecto_id": cod2id.get(l.proyecto),
+                "proyecto_codigo": l.proyecto,
+                "importe": float(l.importe),
+                "porcentaje": float(l.porcentaje),
+                "base": f"[masivo] {texto.strip()} · {l.base}",
+            } for l in res.lines]
+            db.replace_repartos(conn, d["id"], lines)
+            aplicados += 1
+        else:
+            fallidos += 1
+    conn.close()
+    msg = f"Reparto masivo aplicado a {aplicados} documento(s)."
+    if fallidos:
+        msg += f" {fallidos} no se pudieron interpretar."
+    flash(msg, "ok" if aplicados else "error")
+    return redirect(url_for("documentos", estado="repartido"))
 
 
 # --- importación ----------------------------------------------------------
@@ -342,8 +509,17 @@ def importar():
                 r = importer.import_documentos(
                     conn, data, tipo_defecto=request.form.get("tipo_defecto", "factura"))
                 msg = f"{r['importados']} documento(s) importado(s)."
-                if r["cuentas_creadas"] or r["centros_creados"]:
-                    msg += f" Creadas {r['cuentas_creadas']} cuenta(s) y {r['centros_creados']} centro(s)."
+                extras = []
+                if r["cuentas_creadas"]:
+                    extras.append(f"{r['cuentas_creadas']} cuenta(s)")
+                if r["centros_creados"]:
+                    extras.append(f"{r['centros_creados']} centro(s)")
+                if r.get("terceros_creados"):
+                    extras.append(f"{r['terceros_creados']} tercero(s)")
+                if extras:
+                    msg += " Creados: " + ", ".join(extras) + "."
+                if r.get("repartidos_auto"):
+                    msg += f" {r['repartidos_auto']} repartido(s) automáticamente por regla de centro."
                 if r["errores"]:
                     msg += " Incidencias: " + " | ".join(r["errores"][:5])
             else:
@@ -390,13 +566,27 @@ def informe():
     conn = get_conn()
     por_proyecto = db.resumen_por_proyecto(conn)
     por_centro = db.resumen_por_centro(conn)
-    # detalle por proyecto
+    por_cuenta = db.resumen_por_cuenta(conn)
     detalle = {}
     for p in por_proyecto:
         detalle[p["id"]] = db.detalle_proyecto(conn, p["id"])
     conn.close()
+    graf_proyecto = charts.barras_horizontales(
+        [(p["codigo"], p["imputado"]) for p in por_proyecto if p["imputado"]][:10])
+    graf_cuenta = charts.barras_horizontales(
+        [(c["codigo"], c["importe"]) for c in por_cuenta if c["importe"]][:10])
     return render_template("informe.html", por_proyecto=por_proyecto,
-                           por_centro=por_centro, detalle=detalle)
+                           por_centro=por_centro, por_cuenta=por_cuenta, detalle=detalle,
+                           graf_proyecto=graf_proyecto, graf_cuenta=graf_cuenta)
+
+
+@app.route("/backup")
+def backup():
+    conn = get_conn()
+    data = importer.export_backup(conn)
+    conn.close()
+    return send_file(io.BytesIO(data), as_attachment=True,
+                     download_name="costcontrol_backup.json", mimetype="application/json")
 
 
 @app.route("/informe/exportar")

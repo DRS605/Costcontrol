@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+{% block title %}Reglas de reparto · CostControl{% endblock %}
+{% block body %}
+<h1>Reglas de reparto</h1>
+<p class="subtitle">Plantillas de reparto reutilizables. Úsalas en cualquier documento o en el reparto masivo.</p>
+
+<div class="split">
+  <div class="card">
+    <h2>Plantillas guardadas</h2>
+    {% if reglas %}
+    <div class="table-wrap">
+    <table>
+      <thead><tr><th>Nombre</th><th>Regla</th><th></th></tr></thead>
+      <tbody>
+      {% for r in reglas %}
+        <tr>
+          <td><b>{{ r.nombre }}</b></td>
+          <td class="small muted">{{ r.texto }}</td>
+          <td class="right"><button class="btn sec sm" onclick='editar({{ r | tojson }})'>Editar</button></td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    </div>
+    {% else %}
+    <div class="empty">Aún no hay plantillas. Crea la primera.</div>
+    {% endif %}
+  </div>
+
+  <div class="card">
+    <h2 id="form-title">Nueva regla</h2>
+    <form method="post" action="{{ url_for('reglas_guardar') }}" id="r-form">
+      <input type="hidden" name="id" id="r-id">
+      <label>Nombre *</label><input name="nombre" id="r-nombre" required placeholder="Reparto obra estándar">
+      <label>Texto del reparto *</label>
+      <textarea name="texto" id="r-texto" rows="2" required placeholder="60% PROY-A, 40% PROY-B"></textarea>
+      <div class="actions" style="margin-top:16px">
+        <button class="btn accent" type="submit">Guardar</button>
+        <button class="btn sec" type="button" onclick="resetForm()">Limpiar</button>
+        <button class="btn danger sm" type="button" id="btn-borrar" style="display:none" onclick="borrar()">Eliminar</button>
+      </div>
+    </form>
+    <form method="post" id="del-form" style="display:none"></form>
+
+    <div class="tag-help" style="margin-top:16px">
+      <b>Proyectos disponibles:</b>
+      {% for p in proyectos %}<code>{{ p.codigo }}</code>{% if not loop.last %} {% endif %}{% endfor %}
+      {% if not proyectos %}<span class="muted">crea proyectos primero</span>{% endif %}
+    </div>
+  </div>
+</div>
+
+{% block scripts %}
+<script>
+function resetForm(){
+  document.getElementById('r-form').reset();
+  document.getElementById('r-id').value='';
+  document.getElementById('form-title').textContent='Nueva regla';
+  document.getElementById('btn-borrar').style.display='none';
+}
+function editar(r){
+  document.getElementById('form-title').textContent='Editar regla';
+  document.getElementById('r-id').value=r.id;
+  document.getElementById('r-nombre').value=r.nombre||'';
+  document.getElementById('r-texto').value=r.texto||'';
+  document.getElementById('btn-borrar').style.display='inline-block';
+  window.scrollTo({top:0, behavior:'smooth'});
+}
+function borrar(){
+  const id=document.getElementById('r-id').value;
+  if(!id||!confirm('¿Eliminar esta regla?'))return;
+  const f=document.getElementById('del-form'); f.action='/reglas/'+id+'/borrar'; f.submit();
+}
+</script>
+{% endblock %}
+{% endblock %}

@@ -1,8 +1,22 @@
 {% extends "base.html" %}
 {% block title %}Panel · CostControl{% endblock %}
 {% block body %}
-<h1>Panel de control</h1>
-<p class="subtitle">Visión general de costes, documentos y reparto analítico.</p>
+<div class="actions" style="justify-content:space-between; align-items:flex-end">
+  <div>
+    <h1>Panel de control</h1>
+    <p class="subtitle">Visión general de costes, documentos y reparto analítico.</p>
+  </div>
+  {% if ejercicios %}
+  <form method="get" class="inline-form">
+    <div><label>Ejercicio</label>
+      <select name="ejercicio" onchange="this.form.submit()">
+        <option value="">Todos</option>
+        {% for e in ejercicios %}<option value="{{ e }}" {{ 'selected' if ejercicio_sel==(e|string) }}>{{ e }}</option>{% endfor %}
+      </select>
+    </div>
+  </form>
+  {% endif %}
+</div>
 
 <div class="grid kpi">
   <div class="kpi-card accent">
@@ -20,6 +34,24 @@
   <div class="kpi-card">
     <div class="label">Docs. pendientes</div>
     <div class="value">{{ tot.n_pendientes or 0 }}</div>
+  </div>
+</div>
+
+{% if hay_serie %}
+<div class="card chart-card">
+  <h2>Evolución mensual del coste{% if ejercicio_sel %} · {{ ejercicio_sel }}{% endif %}</h2>
+  {{ graf_mensual | safe }}
+</div>
+{% endif %}
+
+<div class="grid cols2">
+  <div class="card chart-card">
+    <h2>Coste imputado por proyecto</h2>
+    {{ graf_proyecto | safe }}
+  </div>
+  <div class="card chart-card">
+    <h2>Importe por centro</h2>
+    {{ graf_centro | safe }}
   </div>
 </div>
 

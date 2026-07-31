@@ -18,10 +18,18 @@
       <div><label>Fecha</label><input name="fecha" type="date" value="{{ doc.fecha if doc }}"></div>
     </div>
     <div class="form-row">
-      <div><label>Tercero (proveedor/cliente)</label><input name="tercero" value="{{ doc.tercero if doc }}"></div>
-      <div><label>Importe (€) *</label><input name="importe" required value="{{ doc.importe if doc }}" placeholder="3630.50"></div>
+      <div><label>Tercero (proveedor/cliente)</label>
+        <input name="tercero" list="terceros-list" value="{{ doc.tercero if doc }}" placeholder="Se da de alta si es nuevo">
+        <datalist id="terceros-list">{% for t in terceros %}<option value="{{ t.nombre }}">{% endfor %}</datalist>
+      </div>
+      <div><label>Concepto</label><input name="concepto" value="{{ doc.concepto if doc }}"></div>
     </div>
-    <label>Concepto</label><input name="concepto" value="{{ doc.concepto if doc }}">
+    <div class="form-row three">
+      <div><label>Base imponible (€) *</label><input name="importe" required value="{{ doc.importe if doc }}" placeholder="3630.50"></div>
+      <div><label>IVA (%)</label><input name="iva_pct" value="{{ doc.iva_pct if doc else '' }}" placeholder="21"></div>
+      <div><label>Total (con IVA)</label><input value="{{ (doc.total if doc else '') }}" disabled placeholder="se calcula"></div>
+    </div>
+    <p class="small muted" style="margin:2px 0 0">La <b>base imponible</b> es el importe que se reparte analíticamente entre proyectos.</p>
     <div class="form-row">
       <div><label>Cuenta contable</label>
         <select name="cuenta_id">

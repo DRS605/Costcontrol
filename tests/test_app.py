@@ -23,7 +23,8 @@ def run():
     ok = 0
 
     # páginas principales
-    for url in ["/", "/documentos", "/proyectos", "/centros", "/cuentas", "/importar", "/informe"]:
+    for url in ["/", "/documentos", "/proyectos", "/centros", "/cuentas", "/importar",
+                "/informe", "/terceros", "/reglas", "/reparto-masivo"]:
         r = client.get(url)
         assert r.status_code == 200, f"{url} -> {r.status_code}"
         ok += 1
@@ -86,10 +87,77 @@ def run():
     conn = db.connect()
     n = len(db.list_documentos(conn))
     conn.close()
-    assert n >= 7, f"esperados >=7 documentos, hay {n}"
+    assert n >= 8, f"esperados >=8 documentos, hay {n}"
     print("  ok  importar Excel de documentos"); ok += 1
 
+    # filtros avanzados + exportación de documentos
+    r = client.get("/documentos?estado=pendiente&texto=Material")
+    assert r.status_code == 200
+    r = client.get("/documentos/exportar?estado=pendiente")
+    assert r.status_code == 200 and r.data[:2] == b"PK"
+    print("  ok  filtros + exportar documentos"); ok += 1
+
+    # terceros CRUD
+    r = client.post("/terceros/guardar", data={"nombre": "Proveedor Test SL", "nif": "B12345678"},
+                    follow_redirects=True)
+    assert r.status_code == 200
+    conn = db.connect(); ters = db.list_terceros(conn); conn.close()
+    assert any(t["nombre"] == "Proveedor Test SL" for t in ters)
+    print("  ok  alta de tercero"); ok += 1
+
+    # reglas CRUD
+    r = client.post("/reglas/guardar", data={"nombre": "Regla Test", "texto": "todo a PROY-A"},
+                    follow_redirects=True)
+    assert r.status_code == 200
+    conn = db.connect(); regs = db.list_reglas(conn); conn.close()
+    assert any(x["nombre"] == "Regla Test" for x in regs)
+    print("  ok  alta de regla"); ok += 1
+
+    # reparto masivo sobre documentos pendientes
+    conn = db.connect()
+    pend = db.list_documentos(conn, estado="pendiente")
+    conn.close()
+    ids = [str(d["id"]) for d in pend[:3]]
+    r = client.post("/reparto-masivo/aplicar",
+                    data={"texto": "a partes iguales entre PROY-A, PROY-B, PROY-C",
+                          "doc_ids": ids}, follow_redirects=True)
+    assert r.status_code == 200
+    conn = db.connect()
+    for did2 in ids:
+        reps = db.get_repartos(conn, int(did2))
+        assert len(reps) == 3, f"doc {did2}: {reps}"
+    conn.close()
+    print("  ok  reparto masivo por regla"); ok += 1
+
+    # regla por defecto de centro aplicada al importar
+    conn = db.connect()
+    cid = db.upsert_centro(conn, "CC-AUTO", "Centro auto", "coste", regla_defecto="todo a PROY-A")
+    conn.close()
+    wb_bytes = _excel_doc_centro("CC-AUTO")
+    r = client.post("/importar", data={"destino": "documentos", "tipo_defecto": "factura",
+                    "archivo": (io.BytesIO(wb_bytes), "auto.xlsx")},
+                    content_type="multipart/form-data", follow_redirects=True)
+    assert r.status_code == 200
+    conn = db.connect()
+    autos = db.list_documentos(conn, centro_id=cid, estado="repartido")
+    assert len(autos) >= 1, "el documento del centro con regla debería quedar repartido"
+    conn.close()
+    print("  ok  regla por defecto de centro al importar"); ok += 1
+
+    # copia de seguridad JSON
+    r = client.get("/backup")
+    assert r.status_code == 200 and b'"documentos"' in r.data
+    print("  ok  copia de seguridad JSON"); ok += 1
+
     print(f"\nTODO OK ({ok} comprobaciones)")
+
+
+def _excel_doc_centro(centro_cod):
+    from openpyxl import Workbook
+    wb = Workbook(); ws = wb.active
+    ws.append(["Tipo", "Numero", "Fecha", "Tercero", "Concepto", "Importe", "IVA", "Cuenta", "Centro"])
+    ws.append(["factura", "AUTO-1", "2026-04-01", "Proveedor X", "Coste indirecto", 1000, 21, "600000", centro_cod])
+    b = io.BytesIO(); wb.save(b); return b.getvalue()
 
 
 if __name__ == "__main__":

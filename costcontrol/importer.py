@@ -26,9 +26,13 @@ ALIASES = {
     "fecha": ["fecha", "fecha factura", "fecha documento", "date"],
     "tercero": ["tercero", "proveedor", "cliente", "acreedor", "nombre", "razon social"],
     "concepto": ["concepto", "descripcion", "detalle", "texto", "glosa"],
-    "importe": ["importe", "total", "base", "importe total", "cuantia", "coste", "gasto", "amount", "valor"],
+    "importe": ["importe", "base", "base imponible", "importe base", "cuantia", "coste", "gasto", "amount", "valor", "importe total", "total"],
+    "iva_pct": ["iva", "% iva", "iva %", "tipo iva", "porcentaje iva"],
+    "iva_importe": ["cuota iva", "importe iva", "iva importe"],
+    "total": ["total factura", "total documento", "importe con iva", "total con iva"],
     "cuenta": ["cuenta", "cuenta contable", "cta", "cuenta contab", "cod cuenta", "codigo cuenta"],
     "centro": ["centro", "centro de coste", "centro coste", "cc", "centro de beneficio", "centro coste/beneficio", "cost center"],
+    "nif": ["nif", "cif", "nif/cif", "dni"],
 }
 
 TIPOS_VALIDOS = {"factura", "albaran", "albaranes", "apunte", "apuntes", "factura recibida", "factura emitida"}
@@ -66,14 +70,21 @@ def preview_workbook(file_bytes: bytes, max_rows: int = 8) -> Dict[str, Any]:
 
 
 def import_documentos(conn, file_bytes: bytes, tipo_defecto: str = "factura",
-                      crear_maestros: bool = True) -> Dict[str, Any]:
-    """Importa documentos desde un Excel. Crea cuentas/centros si no existen."""
+                      crear_maestros: bool = True, aplicar_reglas: bool = True) -> Dict[str, Any]:
+    """Importa documentos desde un Excel. Crea cuentas/centros/terceros si no existen.
+
+    Si un centro tiene una regla de reparto por defecto, se aplica automáticamente
+    al documento importado (aplicar_reglas=True).
+    """
+    from .allocation import Allocator, Project
+
     wb = load_workbook(io.BytesIO(file_bytes), read_only=True, data_only=True)
     ws = wb.active
     rows = list(ws.iter_rows(values_only=True))
     wb.close()
 
-    result = {"importados": 0, "errores": [], "cuentas_creadas": 0, "centros_creados": 0}
+    result = {"importados": 0, "errores": [], "cuentas_creadas": 0,
+              "centros_creados": 0, "terceros_creados": 0, "repartidos_auto": 0}
     if len(rows) < 2:
         result["errores"].append("El archivo no tiene filas de datos.")
         return result
@@ -88,7 +99,15 @@ def import_documentos(conn, file_bytes: bytes, tipo_defecto: str = "factura",
 
     # cachés de maestros existentes
     cuentas = {_norm(c["codigo"]): c["id"] for c in db.list_cuentas(conn)}
-    centros = {_norm(c["codigo"]): c["id"] for c in db.list_centros(conn)}
+    centros = {_norm(c["codigo"]): c for c in db.list_centros(conn)}
+    terceros = {_norm(t["nombre"]): t["id"] for t in db.list_terceros(conn)}
+
+    # allocator para reglas por defecto
+    projs = [Project(codigo=p["codigo"], nombre=p["nombre"],
+                     drivers={k: v for k, v in (p.get("drivers") or {}).items()})
+             for p in db.list_proyectos(conn, solo_activos=True)]
+    allocator = Allocator(projs)
+    cod2id = {p["codigo"]: p["id"] for p in db.list_proyectos(conn)}
 
     for i, row in enumerate(rows[1:], start=2):
         def cell(campo):
@@ -124,34 +143,70 @@ def import_documentos(conn, file_bytes: bytes, tipo_defecto: str = "factura",
                 cuentas[key] = cuenta_id
                 result["cuentas_creadas"] += 1
 
-        # centro
+        # centro (la caché guarda el registro completo para leer su regla por defecto)
         centro_id = None
+        centro = None
         centro_cod = cell("centro")
         if centro_cod is not None and str(centro_cod).strip():
             key = _norm(centro_cod)
-            centro_id = centros.get(key)
-            if centro_id is None and crear_maestros:
-                centro_id = db.upsert_centro(conn, str(centro_cod).strip(), "")
-                centros[key] = centro_id
+            centro = centros.get(key)
+            if centro is None and crear_maestros:
+                cid = db.upsert_centro(conn, str(centro_cod).strip(), "")
+                centro = db.get_centro(conn, cid)
+                centros[key] = centro
                 result["centros_creados"] += 1
+            centro_id = centro["id"] if centro else None
+
+        # tercero (maestro)
+        tercero_txt = str(cell("tercero") or "").strip()
+        tercero_id = None
+        if tercero_txt:
+            key = _norm(tercero_txt)
+            tercero_id = terceros.get(key)
+            if tercero_id is None and crear_maestros:
+                nif = str(cell("nif") or "").strip()
+                tercero_id = db.upsert_tercero(conn, tercero_txt, nif=nif)
+                terceros[key] = tercero_id
+                result["terceros_creados"] += 1
+
+        # IVA
+        iva_pct = parse_number(cell("iva_pct")) if cell("iva_pct") is not None else None
+        iva_importe = parse_number(cell("iva_importe")) if cell("iva_importe") is not None else None
 
         fecha = cell("fecha")
         if fecha is not None and hasattr(fecha, "strftime"):
             fecha = fecha.strftime("%Y-%m-%d")
 
-        db.insert_documento(
+        did = db.insert_documento(
             conn,
             tipo=tipo,
             numero=str(cell("numero") or "").strip(),
             fecha=str(fecha or "").strip(),
-            tercero=str(cell("tercero") or "").strip(),
+            tercero=tercero_txt,
+            tercero_id=tercero_id,
             concepto=str(cell("concepto") or "").strip(),
             importe=float(importe),
+            iva_pct=float(iva_pct) if iva_pct is not None else 0,
+            iva_importe=float(iva_importe) if iva_importe is not None else None,
             cuenta_id=cuenta_id,
             centro_id=centro_id,
             estado="pendiente",
         )
         result["importados"] += 1
+
+        # reparto automático por regla por defecto del centro
+        if aplicar_reglas and centro and (centro.get("regla_defecto") or "").strip() and projs:
+            res = allocator.allocate(float(importe), centro["regla_defecto"])
+            if res.ok and res.lines:
+                lines = [{
+                    "proyecto_id": cod2id.get(l.proyecto),
+                    "proyecto_codigo": l.proyecto,
+                    "importe": float(l.importe),
+                    "porcentaje": float(l.porcentaje),
+                    "base": f"[auto {centro['codigo']}] {centro['regla_defecto']} · {l.base}",
+                } for l in res.lines]
+                db.replace_repartos(conn, did, lines)
+                result["repartidos_auto"] += 1
 
     return result
 
@@ -232,12 +287,13 @@ def plantilla_documentos() -> bytes:
     wb = Workbook()
     ws = wb.active
     ws.title = "Documentos"
-    headers = ["Tipo", "Numero", "Fecha", "Tercero", "Concepto", "Importe", "Cuenta", "Centro"]
+    headers = ["Tipo", "Numero", "Fecha", "Tercero", "NIF", "Concepto",
+               "Importe", "IVA", "Cuenta", "Centro"]
     ws.append(headers)
     ejemplos = [
-        ["factura", "F-2026/001", "2026-01-15", "Suministros Levante SL", "Material de obra", 3630.50, "600000", "CC-OBRAS"],
-        ["albaran", "ALB-1042", "2026-01-20", "Transportes Mediterraneo", "Portes enero", 480.00, "624000", "CC-LOG"],
-        ["apunte", "AS-5501", "2026-01-31", "Nomina personal tecnico", "Personal indirecto", 12500.00, "640000", "CC-ESTRUCTURA"],
+        ["factura", "F-2026/001", "2026-01-15", "Suministros Levante SL", "B96000001", "Material de obra", 3630.50, 21, "600000", "CC-OBRAS"],
+        ["albaran", "ALB-1042", "2026-01-20", "Transportes Mediterraneo", "B96000002", "Portes enero", 480.00, 21, "624000", "CC-LOG"],
+        ["apunte", "AS-5501", "2026-01-31", "Nomina personal tecnico", "", "Personal indirecto", 12500.00, 0, "640000", "CC-ESTRUCTURA"],
     ]
     for e in ejemplos:
         ws.append(e)
@@ -311,6 +367,56 @@ def export_informe(conn) -> bytes:
     _style_header(ws3, 11)
     _autosize(ws3)
 
+    # Hoja 4: resumen por cuenta contable
+    ws4 = wb.create_sheet("Por cuenta")
+    ws4.append(["Codigo", "Cuenta", "Grupo", "Importe", "Nº documentos"])
+    for c in db.resumen_por_cuenta(conn):
+        ws4.append([c["codigo"], c["nombre"], c["grupo"], round(c["importe"] or 0, 2), c["n_docs"]])
+    _style_header(ws4, 5)
+    _autosize(ws4)
+
     bio = io.BytesIO()
     wb.save(bio)
     return bio.getvalue()
+
+
+def export_documentos(conn, documentos: List[Dict[str, Any]]) -> bytes:
+    """Exporta una lista de documentos (ya filtrada) a Excel."""
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Documentos"
+    ws.append(["Tipo", "Numero", "Fecha", "Tercero", "Concepto", "Importe",
+               "IVA %", "Cuota IVA", "Total", "Cuenta", "Centro", "Estado"])
+    for d in documentos:
+        ws.append([d.get("tipo"), d.get("numero"), d.get("fecha"), d.get("tercero"),
+                   d.get("concepto"), round(d.get("importe") or 0, 2),
+                   round(d.get("iva_pct") or 0, 2), round(d.get("iva_importe") or 0, 2),
+                   round(d.get("total") or 0, 2), d.get("cuenta_codigo"),
+                   d.get("centro_codigo"), d.get("estado")])
+    _style_header(ws, 12)
+    _autosize(ws)
+    bio = io.BytesIO()
+    wb.save(bio)
+    return bio.getvalue()
+
+
+def export_backup(conn) -> bytes:
+    """Copia de seguridad completa en JSON."""
+    import json
+
+    data = {
+        "version": 2,
+        "proyectos": db.list_proyectos(conn),
+        "centros": db.list_centros(conn),
+        "cuentas": db.list_cuentas(conn),
+        "terceros": db.list_terceros(conn),
+        "reglas": db.list_reglas(conn),
+        "documentos": db.list_documentos(conn),
+    }
+    # repartos por documento
+    reps = []
+    for d in data["documentos"]:
+        for r in db.get_repartos(conn, d["id"]):
+            reps.append(r)
+    data["repartos"] = reps
+    return json.dumps(data, ensure_ascii=False, indent=2, default=str).encode("utf-8")
