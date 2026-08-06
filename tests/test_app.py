@@ -137,6 +137,16 @@ def run():
     assert abs(porc["PROY-A"] - 62.5) < 0.1 and abs(porc["PROY-B"] - 37.5) < 0.1, porc
     print("  ok  reescalado de regla a subconjunto"); ok += 1
 
+    # combinar regla + reparto directo ("50% como la regla X, resto a Z")
+    r = client.post(f"/documentos/{dref['id']}/reparto/previsualizar",
+                    json={"texto": "50% como la regla Mitades, resto a PROY-C"})
+    d = r.get_json()
+    assert d["ok"], d
+    imp_map = {l["proyecto"]: l["importe"] for l in d["lineas"]}
+    assert abs(imp_map.get("PROY-C", 0) - dref["importe"] * 0.5) < 0.02, imp_map
+    assert abs(d["repartido"] - dref["importe"]) < 0.01
+    print("  ok  combinar regla + reparto directo"); ok += 1
+
     # reparto masivo sobre documentos pendientes
     conn = db.connect()
     pend = db.list_documentos(conn, estado="pendiente")

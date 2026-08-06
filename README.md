@@ -30,11 +30,14 @@ herramienta traduce ese texto libre a líneas analíticas concretas.
   | `PROY-A 30%, PROY-B 500 €, resto PROY-C` | mezcla de %, importe y resto |
   | `como la regla Obra estándar` | reutiliza una **regla guardada** por su nombre |
   | `según la regla Obra, pero solo PROY-A y PROY-B` | **reescala** la regla a un subconjunto |
+  | `50% como la regla Obra, resto a PROY-Z` | **combina** una regla con reparto directo |
 
   Las reglas se guardan una vez (sección *Reglas*) y se invocan por nombre con
   `como la regla NOMBRE` / `según la regla NOMBRE` en cualquier documento; se
   pueden **reescalar a un subconjunto** (`… solo A y B`, o `… excepto C`),
-  **anidar** (una regla que referencia a otra) y el motor detecta ciclos.
+  **combinar** con reparto directo (`50% como la regla X, resto a Z`;
+  `1000 € a Z, resto como la regla X`), **anidar** (una regla que referencia a
+  otra) y el motor detecta ciclos.
 
   Cada reparto muestra una **traducción legible** de lo interpretado y avisa si
   algo no cuadra (queda importe sin repartir, se pasa del total, etc.).

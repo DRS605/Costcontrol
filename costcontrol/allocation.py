@@ -134,6 +134,12 @@ _SPLIT_RE = re.compile(r"[,;\n/]| y | e | mas | \+ ", re.IGNORECASE)
 # referencia a una regla guardada: "como la regla X", "según la regla X"...
 _RULEREF_RE = re.compile(
     r"\b(?:como|segun|aplica|aplicar|usa|usar|con)\s+(?:la\s+|el\s+)?regla\s+(.+)")
+# bloque de regla con peso, dentro de una combinación:
+#   "50% como la regla X", "1000€ como la regla X", "resto como la regla X"
+_COMBO_SPLIT = re.compile(r"[,;\n]")
+_RULEBLOCK_RE = re.compile(
+    r"(?:\d[\d.,]*\s*%|\d[\d.,]*\s*(?:€|eur\w*)|\bresto\b)\s*"
+    r"(?:como|segun|aplica\w*|usa\w*|con)\s+(?:la\s+|el\s+)?regla\b")
 # Números "de verdad": no cuentan los dígitos pegados a letras (p.ej. el 1 de
 # PROY1 o el 2 de m2). El número debe empezar tras un espacio, inicio, € o (.
 _NUM_RE = re.compile(r"(?<![A-Za-z0-9])\d[\d\.\,]*")
@@ -232,6 +238,10 @@ class Allocator:
             res.warnings.append("No se ha escrito ninguna regla de reparto.")
             return res
         n = norm(raw)
+
+        # ---- MODO: combinar regla(s) con reparto directo -----------------
+        if self._rules and _RULEBLOCK_RE.search(n):
+            return self._combine(total, raw, res, _seen)
 
         # ---- MODO: reutilizar una regla guardada ("como la regla X") -----
         if self._rules:
@@ -332,6 +342,108 @@ class Allocator:
         sub.criterio = f'regla «{nombre}»'
         sub.explanation.insert(0, f'Aplicada la regla guardada «{nombre}» ("{texto}").')
         return sub
+
+    @staticmethod
+    def _merge_lines(lines, total):
+        """Suma las líneas del mismo proyecto y recalcula porcentajes."""
+        order, agg = [], {}
+        for l in lines:
+            if l.proyecto not in agg:
+                agg[l.proyecto] = AllocationLine(l.proyecto, l.nombre, Decimal("0"),
+                                                 Decimal("0"), l.base)
+                order.append(l.proyecto)
+            agg[l.proyecto].importe = money(agg[l.proyecto].importe + l.importe)
+        out = []
+        for code in order:
+            a = agg[code]
+            a.porcentaje = money(a.importe / total * 100) if total else Decimal("0")
+            out.append(a)
+        return out
+
+    def _combine(self, total, raw, res, _seen) -> AllocationResult:
+        """Combina bloques de regla (con peso) con segmentos de reparto directo.
+
+        Cada bloque "N% / N€ como la regla X" se expande a importes concretos;
+        "resto como la regla X" reparte el remanente según esa regla. El resto
+        de segmentos (porcentajes, importes, resto a un proyecto) se resuelven
+        con el motor normal.
+        """
+        euro_segments: List[str] = []   # segmentos sintéticos "importe € CODIGO"
+        direct_segments: List[str] = []  # segmentos directos, tal cual
+        rest_rule = None                 # líneas de la regla que absorbe el remanente
+        nombres: List[str] = []
+
+        for seg in (s.strip() for s in _COMBO_SPLIT.split(raw) if s.strip()):
+            sn = norm(seg)
+            mref = _RULEREF_RE.search(sn)
+            matched = self._match_rule(mref.group(1).strip()) if mref else None
+            if not matched:
+                direct_segments.append(seg)
+                continue
+            sub = self._apply_rule(total, matched, AllocationResult(ok=False, total=total), _seen)
+            if not sub.ok:
+                res.warnings.append(f'La regla «{matched[0]}» no se pudo aplicar en la combinación.')
+                return res
+            nombres.append(matched[0])
+            has_pct = "%" in seg or "por ciento" in sn
+            has_eur = bool(re.search(r"€|eur", seg, re.IGNORECASE))
+            nums = _numbers(seg)
+            val = parse_number(nums[0]) if nums else None
+            if val is not None and has_pct:
+                for l in sub.lines:
+                    imp = money(l.importe * val / 100)
+                    if imp:
+                        euro_segments.append(f"{imp} € {l.proyecto}")
+            elif val is not None and has_eur:
+                for l in sub.lines:
+                    imp = money(val * l.importe / total) if total else Decimal("0")
+                    if imp:
+                        euro_segments.append(f"{imp} € {l.proyecto}")
+            else:
+                rest_rule = sub.lines  # "resto como la regla X"
+
+        # resuelve la parte directa (importes fijos de las reglas + segmentos directos)
+        parts = euro_segments + direct_segments
+        text2 = ", ".join(parts)
+        if text2.strip():
+            base = self._by_segments(total, text2, AllocationResult(ok=False, total=total), None)
+        else:
+            base = AllocationResult(ok=True, total=total)
+        lines = list(base.lines)
+
+        # el remanente lo reparte la regla marcada como "resto"
+        if rest_rule is not None:
+            asignado = sum((l.importe for l in lines), Decimal("0"))
+            remaining = money(total - asignado)
+            if remaining > 0:
+                fr_total = sum((l.importe for l in rest_rule), Decimal("0")) or total
+                add = []
+                for l in rest_rule:
+                    imp = money(remaining * l.importe / fr_total)
+                    if imp:
+                        add.append(AllocationLine(l.proyecto, l.nombre, imp,
+                                                  money(imp / total * 100) if total else Decimal("0"),
+                                                  "resto por regla"))
+                dif = money(remaining - sum((x.importe for x in add), Decimal("0")))
+                if add and dif != 0:
+                    biggest = max(add, key=lambda x: x.importe)
+                    biggest.importe = money(biggest.importe + dif)
+                lines += add
+            elif remaining < 0:
+                res.warnings.append("Lo asignado supera el total; no queda remanente para la regla.")
+
+        merged = self._merge_lines(lines, total)
+        res.lines = merged
+        res.ok = bool(merged)
+        res.criterio = "combinación"
+        etiqueta = f" (reglas: {', '.join(nombres)})" if nombres else ""
+        res.explanation.insert(0, f"Reparto combinado{etiqueta}.")
+        dif = money(total - sum((l.importe for l in merged), Decimal("0")))
+        if dif > 0:
+            res.warnings.append(f"Quedan {dif} € sin repartir (¿falta un 'resto'?).")
+        elif dif < 0:
+            res.warnings.append(f"Se ha repartido {abs(dif)} € de más respecto al total.")
+        return res
 
     # -- estrategias -------------------------------------------------------
     def _equal(self, total, projs, res) -> AllocationResult:

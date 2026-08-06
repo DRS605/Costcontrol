@@ -146,6 +146,34 @@ def test_regla_subconjunto_excepto():
     assert imp(r, "PROY2") == Decimal("375.00")
 
 
+def test_combina_regla_pct_y_resto():
+    rules = {"Obra": "60% PROY1, 40% PROY2"}
+    r = allocate("1000", "50% como la regla Obra, resto a PROY3", _projs(), rules=rules)
+    assert r.ok
+    assert imp(r, "PROY1") == Decimal("300.00")   # 50%*60%
+    assert imp(r, "PROY2") == Decimal("200.00")   # 50%*40%
+    assert imp(r, "PROY3") == Decimal("500.00")   # resto
+    assert r.repartido == Decimal("1000.00")
+
+
+def test_combina_regla_pct_y_pct():
+    rules = {"Obra": "60% PROY1, 40% PROY2"}
+    r = allocate("1000", "50% como la regla Obra, 50% a PROY3", _projs(), rules=rules)
+    assert r.ok
+    assert imp(r, "PROY1") == Decimal("300.00")
+    assert imp(r, "PROY3") == Decimal("500.00")
+
+
+def test_combina_importe_y_resto_regla():
+    rules = {"Obra": "60% PROY1, 40% PROY2"}
+    r = allocate("1000", "400 € a PROY3, resto como la regla Obra", _projs(), rules=rules)
+    assert r.ok
+    assert imp(r, "PROY3") == Decimal("400.00")
+    assert imp(r, "PROY1") == Decimal("360.00")   # 60% de 600
+    assert imp(r, "PROY2") == Decimal("240.00")   # 40% de 600
+    assert r.repartido == Decimal("1000.00")
+
+
 def test_regla_circular_no_cuelga():
     rules = {"A": "como la regla B", "B": "como la regla A"}
     r = allocate("1000", "como la regla A", _projs(), rules=rules)
