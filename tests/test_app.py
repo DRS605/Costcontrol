@@ -203,6 +203,19 @@ def run():
     assert abs(anual - 1500) < 0.01, anual
     print("  ok  presupuesto mensual y anual"); ok += 1
 
+    # presupuesto por centro
+    conn = db.connect(); cid_b = db.list_centros(conn)[0]["id"]; conn.close()
+    client.post("/presupuestos/guardar",
+                data={"ejercicio": "2026", f"presc_{cid_b}_1": "2000", f"presc_{cid_b}_3": "1000"},
+                follow_redirects=True)
+    conn = db.connect()
+    anual_c = db.presupuesto_centro_anual(conn, cid_b, 2026)
+    seg_c = db.seguimiento_centros(conn, 2026)
+    conn.close()
+    assert abs(anual_c - 3000) < 0.01, anual_c
+    assert any(s["id"] == cid_b and s["estado"] != "sin_presupuesto" for s in seg_c)
+    print("  ok  presupuesto por centro y seguimiento"); ok += 1
+
     # cierre de periodo bloquea el reparto
     conn = db.connect()
     docs1 = [d for d in db.list_documentos(conn) if d["ejercicio"] == 2026 and d["periodo"] == 1]

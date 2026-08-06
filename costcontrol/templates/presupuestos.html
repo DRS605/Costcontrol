@@ -86,6 +86,77 @@
 </div>
 
 <div class="card">
+  <h2>Seguimiento por centro de coste/beneficio {{ ejercicio }}</h2>
+  <p class="small muted">Presupuesto del centro frente al importe real de sus documentos.</p>
+  {% if seguimiento_centro %}
+  <div class="table-wrap">
+  <table>
+    <thead><tr><th>Centro</th><th class="num">Presupuesto</th><th class="num">Real</th><th class="num">Desviación</th><th style="width:150px">Consumo</th><th>Estado</th></tr></thead>
+    <tbody>
+    {% for s in seguimiento_centro %}
+      <tr>
+        <td><b>{{ s.codigo }}</b> <span class="small muted">{{ s.nombre }}</span></td>
+        <td class="num">{{ s.presupuesto | eur }}</td>
+        <td class="num">{{ s.imputado | eur }}</td>
+        <td class="num" style="color: {{ '#b3261e' if s.desviacion < 0 else '#4f9a10' }}">{{ s.desviacion | eur }}</td>
+        <td>
+          <div class="bar"><span class="{{ 'over' if s.pct > 100 }}" style="width: {{ [s.pct,100]|min }}%"></span></div>
+          <span class="small muted">{{ '%.0f'|format(s.pct) }}%</span>
+        </td>
+        <td>
+          {% if s.estado=='excedido' %}<span class="badge b-excedido">⛔ Excedido</span>
+          {% elif s.estado=='aviso' %}<span class="badge b-aviso">⚠ Cerca del límite</span>
+          {% elif s.estado=='ok' %}<span class="badge b-ok">✓ En presupuesto</span>
+          {% else %}<span class="badge b-none">Sin presupuesto</span>{% endif %}
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% else %}
+  <div class="empty">No hay centros. <a href="{{ url_for('centros') }}">Crea alguno</a>.</div>
+  {% endif %}
+</div>
+
+<div class="card">
+  <div class="actions" style="justify-content:space-between">
+    <h2 style="margin:0">Presupuesto mensual por centro {{ ejercicio }}</h2>
+    <span class="small muted">Importes en € · el anual es la suma de los meses</span>
+  </div>
+  {% if centros %}
+  <form method="post" action="{{ url_for('presupuestos_guardar') }}">
+    <input type="hidden" name="ejercicio" value="{{ ejercicio }}">
+    <div class="table-wrap">
+    <table class="pres-table">
+      <thead><tr><th style="min-width:150px">Centro</th>
+        {% for m in range(1,13) %}<th class="num">{{ meses[m] }}</th>{% endfor %}
+        <th class="num">Anual</th></tr></thead>
+      <tbody>
+      {% for c in centros %}
+        <tr data-pid="c{{ c.id }}">
+          <td><b>{{ c.codigo }}</b></td>
+          {% for m in range(1,13) %}
+          <td><input name="presc_{{ c.id }}_{{ m }}" class="pres-in"
+                     value="{{ pres_centro.get(c.id,{}).get(m,'') or '' }}" inputmode="decimal"
+                     style="width:80px; text-align:right; padding:6px"></td>
+          {% endfor %}
+          <td class="num"><b class="pres-anual">0</b></td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    </div>
+    <div class="actions" style="margin-top:14px">
+      <button class="btn accent" type="submit">Guardar presupuestos de centro</button>
+    </div>
+  </form>
+  {% else %}
+  <div class="empty">Sin centros.</div>
+  {% endif %}
+</div>
+
+<div class="card">
   <h2>Cierre de periodos {{ ejercicio }}</h2>
   <p class="small muted">Al cerrar un mes, sus documentos no se pueden crear, editar, borrar ni repartir.</p>
   <div class="cierre-grid">

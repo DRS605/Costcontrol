@@ -125,11 +125,16 @@ def index():
     # alertas de presupuesto para el ejercicio seleccionado (o el más reciente)
     ej_pres = int(ejercicio) if ejercicio else (ejercicios_l[0] if ejercicios_l else None)
     seg = db.seguimiento_presupuestario(conn, ej_pres) if ej_pres else []
+    seg_c = db.seguimiento_centros(conn, ej_pres) if ej_pres else []
     alertas = {
         "excedido": [s for s in seg if s["estado"] == "excedido"],
         "aviso": [s for s in seg if s["estado"] == "aviso"],
+        "excedido_c": [s for s in seg_c if s["estado"] == "excedido"],
+        "aviso_c": [s for s in seg_c if s["estado"] == "aviso"],
         "ejercicio": ej_pres,
     }
+    alertas["hay"] = any([alertas["excedido"], alertas["aviso"],
+                          alertas["excedido_c"], alertas["aviso_c"]])
     # comparativa año actual vs. anterior
     comp = None
     if ej_pres:
@@ -833,14 +838,17 @@ def presupuestos():
     proyectos_l = db.list_proyectos(conn)
     pres = db.get_presupuestos(conn, ejercicio)
     seguimiento = db.seguimiento_presupuestario(conn, ejercicio)
+    centros_l = db.list_centros(conn)
+    pres_centro = db.get_presupuestos_centro(conn, ejercicio)
+    seguimiento_centro = db.seguimiento_centros(conn, ejercicio)
     cierres = db.list_cierres(conn)
     cerrados = db.cierres_set(conn)
     conn.close()
-    # imputado por mes para el semáforo mensual no es necesario aquí
     return render_template("presupuestos.html", proyectos=proyectos_l, pres=pres,
                            ejercicio=ejercicio, ejercicios=ejs or [ejercicio],
                            seguimiento=seguimiento, meses=MESES, cierres=cierres,
-                           cerrados=cerrados,
+                           cerrados=cerrados, centros=centros_l, pres_centro=pres_centro,
+                           seguimiento_centro=seguimiento_centro,
                            anios=sorted({ejercicio, 2025, 2026, 2027}))
 
 
@@ -855,6 +863,12 @@ def presupuestos_guardar():
             if campo in request.form:
                 val = parse_number(request.form.get(campo)) or 0
                 db.set_presupuesto(conn, p["id"], ejercicio, mes, float(val))
+    for c in db.list_centros(conn):
+        for mes in range(1, 13):
+            campo = f"presc_{c['id']}_{mes}"
+            if campo in request.form:
+                val = parse_number(request.form.get(campo)) or 0
+                db.set_presupuesto_centro(conn, c["id"], ejercicio, mes, float(val))
     conn.close()
     flash("Presupuestos guardados.", "ok")
     return redirect(url_for("presupuestos", ejercicio=ejercicio))

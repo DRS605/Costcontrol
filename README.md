@@ -44,9 +44,11 @@ herramienta traduce ese texto libre a líneas analíticas concretas.
   centro y **por cuenta contable**, exportable a Excel.
 - 🔎 **Búsqueda y filtros avanzados** en documentos (texto, fechas, importe,
   ejercicio/periodo, centro, cuenta) y **exportación** de la vista filtrada.
-- 🎯 **Presupuestos por proyecto y periodo** (mensual; el anual es la suma), con
-  **seguimiento y alertas de desviación** (semáforo verde/ámbar/rojo) en la
-  página de presupuestos y en el panel.
+- 🎯 **Presupuestos por proyecto y por centro**, por periodo (mensual; el anual
+  es la suma), con **seguimiento y alertas de desviación** (semáforo
+  verde/ámbar/rojo) en la página de presupuestos y en el panel. El de proyecto
+  se compara con lo imputado por reparto; el de centro, con el importe real de
+  sus documentos.
 - 🔒 **Cierre de periodo**: cierra un mes y sus documentos quedan bloqueados (no
   se pueden crear, editar, borrar, repartir ni importar); reversible.
 - ✋ **Ajuste manual del reparto** línea a línea, con indicador de cuadre en

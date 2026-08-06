@@ -37,15 +37,25 @@
   </div>
 </div>
 
-{% if alertas and (alertas.excedido or alertas.aviso) %}
-<div class="card" style="border-left:4px solid {{ '#b3261e' if alertas.excedido else '#a86a12' }}">
-  <div class="actions" style="justify-content:space-between; align-items:center">
+{% if alertas and alertas.hay %}
+<div class="card" style="border-left:4px solid {{ '#b3261e' if (alertas.excedido or alertas.excedido_c) else '#a86a12' }}">
+  <div class="actions" style="justify-content:space-between; align-items:flex-start">
     <div>
       <b>Alertas de presupuesto {{ alertas.ejercicio }}</b>
-      <div class="small muted" style="margin-top:4px">
+      {% if alertas.excedido or alertas.aviso %}
+      <div class="small muted" style="margin-top:6px">
+        <span class="muted" style="display:inline-block; width:70px">Proyectos:</span>
         {% for s in alertas.excedido %}<span class="badge b-excedido" style="margin-right:6px">⛔ {{ s.codigo }} {{ '%.0f'|format(s.pct) }}%</span>{% endfor %}
         {% for s in alertas.aviso %}<span class="badge b-aviso" style="margin-right:6px">⚠ {{ s.codigo }} {{ '%.0f'|format(s.pct) }}%</span>{% endfor %}
       </div>
+      {% endif %}
+      {% if alertas.excedido_c or alertas.aviso_c %}
+      <div class="small muted" style="margin-top:6px">
+        <span class="muted" style="display:inline-block; width:70px">Centros:</span>
+        {% for s in alertas.excedido_c %}<span class="badge b-excedido" style="margin-right:6px">⛔ {{ s.codigo }} {{ '%.0f'|format(s.pct) }}%</span>{% endfor %}
+        {% for s in alertas.aviso_c %}<span class="badge b-aviso" style="margin-right:6px">⚠ {{ s.codigo }} {{ '%.0f'|format(s.pct) }}%</span>{% endfor %}
+      </div>
+      {% endif %}
     </div>
     <a href="{{ url_for('presupuestos', ejercicio=alertas.ejercicio) }}" class="btn sec sm">Ver presupuestos</a>
   </div>

@@ -98,6 +98,15 @@ CREATE TABLE IF NOT EXISTS presupuestos (
     UNIQUE(proyecto_id, ejercicio, periodo)
 );
 
+CREATE TABLE IF NOT EXISTS presupuestos_centro (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    centro_id INTEGER NOT NULL REFERENCES centros(id) ON DELETE CASCADE,
+    ejercicio INTEGER NOT NULL,
+    periodo INTEGER NOT NULL DEFAULT 0,   -- 1-12 mes; 0 = anual
+    importe REAL NOT NULL DEFAULT 0,
+    UNIQUE(centro_id, ejercicio, periodo)
+);
+
 CREATE TABLE IF NOT EXISTS cierres (
     ejercicio INTEGER NOT NULL,
     periodo INTEGER NOT NULL,             -- mes 1-12
@@ -617,6 +626,72 @@ def seguimiento_presupuestario(conn, ejercicio) -> List[Dict[str, Any]]:
         out.append({"id": p["id"], "codigo": p["codigo"], "nombre": p["nombre"],
                     "presupuesto": pres, "imputado": imputado,
                     "desviacion": pres - imputado, "pct": pct, "estado": estado})
+    out.sort(key=lambda x: x["pct"], reverse=True)
+    return out
+
+
+# --- Presupuestos por centro ---------------------------------------------
+def get_presupuestos_centro(conn, ejercicio: int) -> Dict[int, Dict[int, float]]:
+    out: Dict[int, Dict[int, float]] = {}
+    for r in conn.execute(
+            "SELECT centro_id, periodo, importe FROM presupuestos_centro WHERE ejercicio=?",
+            (int(ejercicio),)).fetchall():
+        out.setdefault(r["centro_id"], {})[r["periodo"]] = r["importe"]
+    return out
+
+
+def set_presupuesto_centro(conn, centro_id, ejercicio, periodo, importe) -> None:
+    importe = float(importe or 0)
+    with conn:
+        if importe == 0:
+            conn.execute(
+                "DELETE FROM presupuestos_centro WHERE centro_id=? AND ejercicio=? AND periodo=?",
+                (centro_id, int(ejercicio), int(periodo)))
+        else:
+            conn.execute(
+                """INSERT INTO presupuestos_centro (centro_id, ejercicio, periodo, importe)
+                   VALUES (?,?,?,?)
+                   ON CONFLICT(centro_id, ejercicio, periodo)
+                   DO UPDATE SET importe=excluded.importe""",
+                (centro_id, int(ejercicio), int(periodo), importe))
+
+
+def presupuesto_centro_anual(conn, centro_id, ejercicio) -> float:
+    row = conn.execute(
+        "SELECT COALESCE(SUM(importe),0) AS s FROM presupuestos_centro WHERE centro_id=? AND ejercicio=?",
+        (centro_id, int(ejercicio))).fetchone()
+    return float(row["s"]) if row else 0.0
+
+
+def coste_por_centro(conn, ejercicio=None) -> Dict[int, float]:
+    q = ("SELECT centro_id AS cid, COALESCE(SUM(importe),0) AS imp FROM documentos "
+         "WHERE centro_id IS NOT NULL")
+    params: List[Any] = []
+    if ejercicio:
+        q += " AND ejercicio=?"; params.append(int(ejercicio))
+    q += " GROUP BY centro_id"
+    return {row["cid"]: row["imp"] for row in conn.execute(q, params).fetchall()}
+
+
+def seguimiento_centros(conn, ejercicio) -> List[Dict[str, Any]]:
+    """Presupuesto vs coste real (documentos) por centro, con estado (semáforo)."""
+    coste = coste_por_centro(conn, ejercicio)
+    out = []
+    for c in list_centros(conn):
+        pres = presupuesto_centro_anual(conn, c["id"], ejercicio)
+        real = float(coste.get(c["id"], 0) or 0)
+        pct = (real / pres * 100) if pres else 0
+        if not pres:
+            estado = "sin_presupuesto"
+        elif pct > 100:
+            estado = "excedido"
+        elif pct >= 80:
+            estado = "aviso"
+        else:
+            estado = "ok"
+        out.append({"id": c["id"], "codigo": c["codigo"], "nombre": c["nombre"],
+                    "tipo": c["tipo"], "presupuesto": pres, "imputado": real,
+                    "desviacion": pres - real, "pct": pct, "estado": estado})
     out.sort(key=lambda x: x["pct"], reverse=True)
     return out
 
