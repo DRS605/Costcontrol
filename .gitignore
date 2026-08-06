@@ -2,6 +2,7 @@ __pycache__/
 *.pyc
 *.db
 costcontrol.db
+uploads/
 .venv/
 venv/
 env/

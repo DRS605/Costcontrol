@@ -5,7 +5,7 @@
 <p class="subtitle">Datos de la factura, albarán o apunte contable.</p>
 
 <div class="card" style="max-width:760px">
-  <form method="post">
+  <form method="post" enctype="multipart/form-data">
     <div class="form-row three">
       <div><label>Tipo</label>
         <select name="tipo">
@@ -44,6 +44,15 @@
         </select>
       </div>
     </div>
+    <label>Adjuntar factura / albarán (PDF o imagen)</label>
+    {% if doc and doc.adjunto %}
+    <div class="inline-form" style="margin-bottom:8px">
+      <a class="btn sec sm" href="{{ url_for('documento_adjunto', did=doc.id) }}" target="_blank">📎 Ver adjunto</a>
+      <button type="button" class="btn danger sm" onclick="document.getElementById('del-adj').submit()">Quitar</button>
+      <span class="small muted">{{ doc.adjunto }}</span>
+    </div>
+    {% endif %}
+    <input type="file" name="adjunto" accept=".pdf,.png,.jpg,.jpeg,.gif,.webp,.tif,.tiff,.xlsx,.xls,.doc,.docx">
     <label>Notas</label><textarea name="notas" rows="2">{{ doc.notas if doc }}</textarea>
     <div class="actions" style="margin-top:18px">
       <button class="btn accent" type="submit">Guardar y repartir</button>
@@ -56,4 +65,8 @@
     </div>
   </form>
 </div>
+{% if doc and doc.adjunto %}
+<form id="del-adj" method="post" action="{{ url_for('documento_adjunto_borrar', did=doc.id) }}"
+      style="display:none"></form>
+{% endif %}
 {% endblock %}

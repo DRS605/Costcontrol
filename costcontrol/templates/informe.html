@@ -8,9 +8,20 @@
   </div>
   <div class="actions">
     <a href="{{ url_for('backup') }}" class="btn sec">⬇ Copia de seguridad</a>
+    <button type="button" class="btn sec" onclick="document.getElementById('restore-box').style.display='flex'">⬆ Restaurar copia</button>
     <a href="{{ url_for('informe_exportar') }}" class="btn accent">⬇ Exportar a Excel</a>
   </div>
 </div>
+
+<form id="restore-box" method="post" action="{{ url_for('restaurar') }}" enctype="multipart/form-data"
+      style="display:none" class="card" onsubmit="return confirm('Restaurar SUSTITUYE todos los datos actuales por los de la copia. ¿Continuar?')">
+  <div class="inline-form" style="width:100%">
+    <div style="flex:1"><label>Archivo de copia (.json)</label>
+      <input type="file" name="archivo" accept=".json" required></div>
+    <button class="btn danger" type="submit">Restaurar (sustituye los datos)</button>
+    <button class="btn sec" type="button" onclick="document.getElementById('restore-box').style.display='none'">Cancelar</button>
+  </div>
+</form>
 
 {% if graf_proyecto or graf_cuenta %}
 <div class="grid cols2">

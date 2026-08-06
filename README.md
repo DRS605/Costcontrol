@@ -43,7 +43,12 @@ herramienta traduce ese texto libre a líneas analíticas concretas.
   detalle de líneas), por centro y **por cuenta contable**, exportable a Excel.
 - 🔎 **Búsqueda y filtros avanzados** en documentos (texto, fechas, importe,
   ejercicio/periodo, centro, cuenta) y **exportación** de la vista filtrada.
-- 💾 **Copia de seguridad** completa en JSON.
+- ✋ **Ajuste manual del reparto** línea a línea, con indicador de cuadre en
+  vivo (puedes traer al editor lo que traduce el texto y afinarlo a mano).
+- 📎 **Adjuntar la factura/albarán** (PDF o imagen) a cada documento.
+- 🚫 **Detección de duplicados** al importar (mismo número e importe).
+- 💾 **Copia de seguridad** completa en JSON, con **restauración**.
+- 🔒 **Acceso por contraseña opcional** con pantalla de login de marca.
 
 ## Instalación y arranque
 
@@ -106,7 +111,18 @@ tests/            # pruebas del motor y de la app
 ## Datos
 
 Se guardan en un archivo SQLite local (`costcontrol.db` por defecto; cambia la
-ruta con la variable de entorno `COSTCONTROL_DB`). Sin servicios externos.
+ruta con la variable de entorno `COSTCONTROL_DB`). Sin servicios externos. La
+base de datos se **migra automáticamente** al arrancar si vienes de una versión
+anterior.
+
+## Configuración (variables de entorno)
+
+| Variable | Para qué |
+|----------|----------|
+| `COSTCONTROL_DB` | Ruta del archivo SQLite (por defecto `costcontrol.db`). |
+| `COSTCONTROL_UPLOADS` | Carpeta donde se guardan los adjuntos (por defecto `uploads/`). |
+| `COSTCONTROL_PASSWORD` | Si se define, exige contraseña para entrar (pantalla de login). Sin ella, acceso libre. |
+| `COSTCONTROL_SECRET` | Clave de sesión de Flask (defínela en producción). |
 
 ## Pruebas
 

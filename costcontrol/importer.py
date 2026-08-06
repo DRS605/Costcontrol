@@ -69,8 +69,13 @@ def preview_workbook(file_bytes: bytes, max_rows: int = 8) -> Dict[str, Any]:
     }
 
 
+def _clave_doc(numero, importe) -> str:
+    return f"{_norm(numero)}|{round(float(importe or 0), 2)}"
+
+
 def import_documentos(conn, file_bytes: bytes, tipo_defecto: str = "factura",
-                      crear_maestros: bool = True, aplicar_reglas: bool = True) -> Dict[str, Any]:
+                      crear_maestros: bool = True, aplicar_reglas: bool = True,
+                      omitir_duplicados: bool = True) -> Dict[str, Any]:
     """Importa documentos desde un Excel. Crea cuentas/centros/terceros si no existen.
 
     Si un centro tiene una regla de reparto por defecto, se aplica automáticamente
@@ -84,7 +89,8 @@ def import_documentos(conn, file_bytes: bytes, tipo_defecto: str = "factura",
     wb.close()
 
     result = {"importados": 0, "errores": [], "cuentas_creadas": 0,
-              "centros_creados": 0, "terceros_creados": 0, "repartidos_auto": 0}
+              "centros_creados": 0, "terceros_creados": 0, "repartidos_auto": 0,
+              "duplicados": 0}
     if len(rows) < 2:
         result["errores"].append("El archivo no tiene filas de datos.")
         return result
@@ -101,6 +107,8 @@ def import_documentos(conn, file_bytes: bytes, tipo_defecto: str = "factura",
     cuentas = {_norm(c["codigo"]): c["id"] for c in db.list_cuentas(conn)}
     centros = {_norm(c["codigo"]): c for c in db.list_centros(conn)}
     terceros = {_norm(t["nombre"]): t["id"] for t in db.list_terceros(conn)}
+    existentes = {_clave_doc(d["numero"], d["importe"]) for d in db.list_documentos(conn)
+                  if (d["numero"] or "").strip()}
 
     # allocator para reglas por defecto
     projs = [Project(codigo=p["codigo"], nombre=p["nombre"],
@@ -121,6 +129,14 @@ def import_documentos(conn, file_bytes: bytes, tipo_defecto: str = "factura",
                 continue  # fila vacía
             result["errores"].append(f"Fila {i}: importe inválido ({imp_raw!r}).")
             continue
+
+        numero_val = str(cell("numero") or "").strip()
+        if omitir_duplicados and numero_val:
+            clave = _clave_doc(numero_val, importe)
+            if clave in existentes:
+                result["duplicados"] += 1
+                continue
+            existentes.add(clave)
 
         tipo = _norm(cell("tipo")) or tipo_defecto
         if "albaran" in tipo:
@@ -180,7 +196,7 @@ def import_documentos(conn, file_bytes: bytes, tipo_defecto: str = "factura",
         did = db.insert_documento(
             conn,
             tipo=tipo,
-            numero=str(cell("numero") or "").strip(),
+            numero=numero_val,
             fecha=str(fecha or "").strip(),
             tercero=tercero_txt,
             tercero_id=tercero_id,
@@ -421,3 +437,74 @@ def export_backup(conn) -> bytes:
             reps.append(r)
     data["repartos"] = reps
     return json.dumps(data, ensure_ascii=False, indent=2, default=str).encode("utf-8")
+
+
+def restore_backup(conn, file_bytes: bytes) -> Dict[str, Any]:
+    """Restaura una copia de seguridad JSON. SUSTITUYE todos los datos actuales."""
+    import json
+
+    try:
+        data = json.loads(file_bytes.decode("utf-8"))
+    except (ValueError, UnicodeDecodeError) as e:
+        return {"ok": False, "error": f"Archivo JSON no válido: {e}"}
+    if not isinstance(data, dict) or "documentos" not in data:
+        return {"ok": False, "error": "El archivo no parece una copia de CostControl."}
+
+    res = {"ok": True, "error": ""}
+    try:
+        with conn:
+            for t in ("repartos", "documentos", "reglas", "terceros",
+                      "cuentas", "centros", "proyectos"):
+                conn.execute(f"DELETE FROM {t}")
+
+            for p in data.get("proyectos", []):
+                conn.execute(
+                    "INSERT INTO proyectos (id,codigo,nombre,descripcion,activo,presupuesto,drivers) "
+                    "VALUES (?,?,?,?,?,?,?)",
+                    (p.get("id"), p.get("codigo"), p.get("nombre", ""), p.get("descripcion", ""),
+                     int(p.get("activo", 1)), float(p.get("presupuesto", 0) or 0),
+                     json.dumps(p.get("drivers") or {})))
+            for c in data.get("centros", []):
+                conn.execute(
+                    "INSERT INTO centros (id,codigo,nombre,tipo,descripcion,regla_defecto) "
+                    "VALUES (?,?,?,?,?,?)",
+                    (c.get("id"), c.get("codigo"), c.get("nombre", ""), c.get("tipo", "coste"),
+                     c.get("descripcion", ""), c.get("regla_defecto", "")))
+            for c in data.get("cuentas", []):
+                conn.execute("INSERT INTO cuentas (id,codigo,nombre,grupo) VALUES (?,?,?,?)",
+                             (c.get("id"), c.get("codigo"), c.get("nombre", ""), c.get("grupo", "")))
+            for t in data.get("terceros", []):
+                conn.execute("INSERT INTO terceros (id,nombre,nif,tipo) VALUES (?,?,?,?)",
+                             (t.get("id"), t.get("nombre", ""), t.get("nif", ""), t.get("tipo", "proveedor")))
+            for r in data.get("reglas", []):
+                conn.execute("INSERT INTO reglas (id,nombre,texto) VALUES (?,?,?)",
+                             (r.get("id"), r.get("nombre", "Regla"), r.get("texto", "")))
+            for d in data.get("documentos", []):
+                conn.execute(
+                    "INSERT INTO documentos (id,tipo,numero,fecha,tercero,tercero_id,concepto,"
+                    "importe,iva_pct,iva_importe,total,ejercicio,periodo,cuenta_id,centro_id,"
+                    "estado,notas,adjunto) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                    (d.get("id"), d.get("tipo", "factura"), d.get("numero", ""), d.get("fecha", ""),
+                     d.get("tercero", ""), d.get("tercero_id"), d.get("concepto", ""),
+                     float(d.get("importe", 0) or 0), float(d.get("iva_pct", 0) or 0),
+                     float(d.get("iva_importe", 0) or 0), float(d.get("total", 0) or 0),
+                     d.get("ejercicio"), d.get("periodo"), d.get("cuenta_id"), d.get("centro_id"),
+                     d.get("estado", "pendiente"), d.get("notas", ""), d.get("adjunto", "")))
+            for r in data.get("repartos", []):
+                conn.execute(
+                    "INSERT INTO repartos (id,documento_id,proyecto_id,proyecto_codigo,"
+                    "importe,porcentaje,base) VALUES (?,?,?,?,?,?,?)",
+                    (r.get("id"), r.get("documento_id"), r.get("proyecto_id"),
+                     r.get("proyecto_codigo", ""), float(r.get("importe", 0) or 0),
+                     float(r.get("porcentaje", 0) or 0), r.get("base", "")))
+        res.update({
+            "proyectos": len(data.get("proyectos", [])),
+            "centros": len(data.get("centros", [])),
+            "cuentas": len(data.get("cuentas", [])),
+            "terceros": len(data.get("terceros", [])),
+            "documentos": len(data.get("documentos", [])),
+            "repartos": len(data.get("repartos", [])),
+        })
+    except Exception as e:  # noqa
+        return {"ok": False, "error": f"Error al restaurar: {e}"}
+    return res

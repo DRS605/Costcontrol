@@ -88,7 +88,7 @@
     {% for d in documentos %}
       <tr>
         <td><span class="badge {{ d.tipo }}">{{ d.tipo }}</span></td>
-        <td><b>{{ d.numero or '—' }}</b></td>
+        <td><b>{{ d.numero or '—' }}</b>{% if d.adjunto %} <a href="{{ url_for('documento_adjunto', did=d.id) }}" target="_blank" title="Ver adjunto">📎</a>{% endif %}</td>
         <td class="small">{{ d.fecha or '—' }}</td>
         <td>{{ d.tercero or '—' }}</td>
         <td class="small muted">{{ d.concepto[:48] }}{{ '…' if d.concepto and d.concepto|length>48 }}</td>

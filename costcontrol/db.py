@@ -67,6 +67,7 @@ CREATE TABLE IF NOT EXISTS documentos (
     centro_id INTEGER REFERENCES centros(id) ON DELETE SET NULL,
     estado TEXT NOT NULL DEFAULT 'pendiente', -- pendiente | repartido
     notas TEXT DEFAULT '',
+    adjunto TEXT DEFAULT '',              -- nombre del archivo adjunto (factura/albarán)
     creado TEXT DEFAULT (datetime('now'))
 );
 
@@ -107,6 +108,7 @@ _MIGRATIONS = {
         ("total", "REAL NOT NULL DEFAULT 0"),
         ("ejercicio", "INTEGER"),
         ("periodo", "INTEGER"),
+        ("adjunto", "TEXT DEFAULT ''"),
     ],
 }
 
@@ -365,7 +367,7 @@ def insert_documento(conn, **kw) -> int:
 
 def update_documento(conn, did, **kw) -> None:
     campos = ["tipo", "numero", "fecha", "tercero", "tercero_id", "concepto", "importe",
-              "iva_pct", "iva_importe", "cuenta_id", "centro_id", "estado", "notas"]
+              "iva_pct", "iva_importe", "cuenta_id", "centro_id", "estado", "notas", "adjunto"]
     sets, params = [], []
     for c in campos:
         if c in kw:

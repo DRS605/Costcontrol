@@ -147,7 +147,48 @@ def run():
     # copia de seguridad JSON
     r = client.get("/backup")
     assert r.status_code == 200 and b'"documentos"' in r.data
+    backup_bytes = r.data
     print("  ok  copia de seguridad JSON"); ok += 1
+
+    # detección de duplicados al reimportar el mismo Excel
+    data = importer.plantilla_documentos()
+    conn = db.connect(); antes = len(db.list_documentos(conn)); conn.close()
+    client.post("/importar", data={"destino": "documentos", "omitir_duplicados": "on",
+                "archivo": (io.BytesIO(data), "docs.xlsx")},
+                content_type="multipart/form-data", follow_redirects=True)
+    conn = db.connect(); despues = len(db.list_documentos(conn)); conn.close()
+    assert despues == antes, f"los duplicados no se omitieron: {antes} -> {despues}"
+    print("  ok  duplicados omitidos al importar"); ok += 1
+
+    # adjuntar archivo a un documento
+    conn = db.connect(); did2 = db.list_documentos(conn)[0]["id"]; conn.close()
+    r = client.post(f"/documentos/{did2}/editar",
+                    data={"tipo": "factura", "importe": "100",
+                          "adjunto": (io.BytesIO(b"%PDF-1.4 test"), "factura.pdf")},
+                    content_type="multipart/form-data", follow_redirects=True)
+    assert r.status_code == 200
+    conn = db.connect(); doc_adj = db.get_documento(conn, did2); conn.close()
+    assert doc_adj["adjunto"], "no se guardó el adjunto"
+    r = client.get(f"/documentos/{did2}/adjunto")
+    assert r.status_code == 200 and r.data.startswith(b"%PDF")
+    print("  ok  adjuntar y descargar factura"); ok += 1
+
+    # reparto manual (ajuste línea a línea)
+    r = client.post(f"/documentos/{did2}/reparto/guardar-manual",
+                    data={"proyecto_codigo": ["PROY-A", "PROY-B"], "importe": ["70", "30"]},
+                    follow_redirects=True)
+    assert r.status_code == 200
+    conn = db.connect(); reps = db.get_repartos(conn, did2); conn.close()
+    assert len(reps) == 2 and abs(sum(x["importe"] for x in reps) - 100) < 0.01
+    print("  ok  reparto manual línea a línea"); ok += 1
+
+    # restaurar copia de seguridad
+    r = client.post("/restaurar", data={"archivo": (io.BytesIO(backup_bytes), "backup.json")},
+                    content_type="multipart/form-data", follow_redirects=True)
+    assert r.status_code == 200
+    conn = db.connect(); n_rest = len(db.list_documentos(conn)); conn.close()
+    assert n_rest > 0, "la restauración dejó la base vacía"
+    print("  ok  restaurar copia de seguridad"); ok += 1
 
     print(f"\nTODO OK ({ok} comprobaciones)")
 

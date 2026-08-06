@@ -85,6 +85,29 @@
   </div>
 </div>
 
+<div class="card">
+  <div class="actions" style="justify-content:space-between">
+    <h2 style="margin:0">Ajuste manual del reparto</h2>
+    <span class="small muted">Total documento: <b>{{ doc.importe | eur }}</b></span>
+  </div>
+  <p class="small muted">Indica el importe por proyecto. Útil para cuadrar céntimos o casos que el texto no cubre. Puedes traer aquí lo previsualizado con «Ajustar a mano».</p>
+  <form method="post" action="{{ url_for('reparto_guardar_manual', did=doc.id) }}">
+    <div class="table-wrap">
+    <table>
+      <thead><tr><th style="width:55%">Proyecto</th><th class="num">Importe (€)</th><th></th></tr></thead>
+      <tbody id="manual-body"></tbody>
+      <tfoot><tr><th>Total repartido</th><th class="num" id="manual-sum">0,00 €</th><th></th></tr></tfoot>
+    </table>
+    </div>
+    <div id="manual-check" class="small" style="margin-top:8px"></div>
+    <div class="actions" style="margin-top:12px">
+      <button type="button" class="btn sec sm" onclick="addManualRow()">+ Añadir línea</button>
+      <button type="button" class="btn sec sm" onclick="fillManualEqual()">Repartir el total a partes iguales</button>
+      <button class="btn accent" type="submit" style="margin-left:auto">Guardar reparto manual</button>
+    </div>
+  </form>
+</div>
+
 {% if repartos %}
 <div class="card">
   <div class="actions" style="justify-content:space-between">
@@ -149,6 +172,7 @@ function render(d){
       html += `<tr><td><b>${l.proyecto}</b> <span class="small muted">${l.nombre||''}</span></td><td class="num">${l.porcentaje.toFixed(1)}%</td><td class="num">${eur(l.importe)}</td><td class="small muted">${l.base}</td></tr>`;
     });
     html += `</tbody><tfoot><tr><th>Repartido (${d.criterio})</th><th></th><th class="num">${eur(d.repartido)}</th><th class="small muted">de ${eur(d.total)}</th></tr></tfoot></table>`;
+    html += `<div style="margin-top:8px"><button type="button" class="btn sec sm" onclick='setManualFromPreview(${JSON.stringify(d.lineas)})'>✎ Ajustar a mano</button></div>`;
   }
   if(d.explicacion && d.explicacion.length){
     html += '<div class="okbox"><b>Traducción:</b> ' + d.explicacion.join(' ') + '</div>';
@@ -166,5 +190,50 @@ document.getElementById('btn-preview').addEventListener('click', preview);
 let tmr;
 texto.addEventListener('input', ()=>{ clearTimeout(tmr); tmr=setTimeout(preview, 500); });
 if(texto.value.trim()) preview();
+
+// ---- Editor de reparto manual ----
+const PROYECTOS = [{% for p in proyectos %}{codigo:{{ p.codigo|tojson }}, nombre:{{ p.nombre|tojson }}}{{ "," if not loop.last }}{% endfor %}];
+const REPARTOS_INIT = [{% for r in repartos %}{cod:{{ r.proyecto_codigo|tojson }}, imp:{{ r.importe }}}{{ "," if not loop.last }}{% endfor %}];
+const DOC_IMPORTE = {{ doc.importe or 0 }};
+const mBody = document.getElementById('manual-body');
+
+function opts(sel){
+  return PROYECTOS.map(p=>`<option value="${p.codigo}" ${p.codigo===sel?'selected':''}>${p.codigo} · ${p.nombre||''}</option>`).join('');
+}
+function addManualRow(cod='', imp=''){
+  const tr = document.createElement('tr');
+  tr.innerHTML = `<td><select name="proyecto_codigo"><option value="">— proyecto —</option>${opts(cod)}</select></td>
+    <td class="num"><input name="importe" value="${imp}" inputmode="decimal" style="text-align:right"></td>
+    <td class="right"><button type="button" class="btn sec sm" onclick="this.closest('tr').remove();recalcManual()">✕</button></td>`;
+  mBody.appendChild(tr);
+  tr.querySelector('input').addEventListener('input', recalcManual);
+  recalcManual();
+}
+function recalcManual(){
+  let s=0;
+  mBody.querySelectorAll('input[name=importe]').forEach(i=>{
+    const v=parseFloat((i.value||'').replace(/\./g,'').replace(',','.')); if(!isNaN(v)) s+=v;
+  });
+  document.getElementById('manual-sum').textContent = eur(s);
+  const dif = Math.round((DOC_IMPORTE - s)*100)/100;
+  const box = document.getElementById('manual-check');
+  if(Math.abs(dif) < 0.005){ box.innerHTML='<span class="okbox" style="display:inline-block">✓ Cuadra con el total del documento.</span>'; }
+  else if(dif>0){ box.innerHTML=`<span class="warnbox" style="display:inline-block">Faltan ${eur(dif)} por repartir.</span>`; }
+  else { box.innerHTML=`<span class="warnbox" style="display:inline-block">Te has pasado ${eur(-dif)} del total.</span>`; }
+}
+function fillManualEqual(){
+  mBody.innerHTML='';
+  const n = PROYECTOS.length; if(!n) return;
+  const base = Math.floor(DOC_IMPORTE/n*100)/100;
+  PROYECTOS.forEach((p,i)=> addManualRow(p.codigo, (i===n-1 ? (Math.round((DOC_IMPORTE-base*(n-1))*100)/100) : base).toFixed(2).replace('.',',')));
+}
+function setManualFromPreview(lineas){
+  mBody.innerHTML='';
+  lineas.forEach(l=> addManualRow(l.proyecto, l.importe.toFixed(2).replace('.',',')));
+  document.getElementById('manual-body').scrollIntoView({behavior:'smooth', block:'center'});
+}
+// inicializa el editor con el reparto guardado, o una fila vacía
+if(REPARTOS_INIT.length){ REPARTOS_INIT.forEach(r=> addManualRow(r.cod, (r.imp).toFixed(2).replace('.',','))); }
+else { addManualRow(); }
 </script>
 {% endblock %}

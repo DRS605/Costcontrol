@@ -21,6 +21,29 @@ app.secret_key = os.environ.get("COSTCONTROL_SECRET", "costcontrol-dev-secret")
 # Acceso opcional: si se define COSTCONTROL_PASSWORD, se exige contraseña.
 PASSWORD = os.environ.get("COSTCONTROL_PASSWORD", "").strip()
 
+# Carpeta para adjuntos (facturas/albaranes en PDF o imagen).
+UPLOADS = os.environ.get(
+    "COSTCONTROL_UPLOADS",
+    os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "uploads"))
+os.makedirs(UPLOADS, exist_ok=True)
+ADJUNTO_EXT = {".pdf", ".png", ".jpg", ".jpeg", ".gif", ".webp", ".tif", ".tiff", ".xlsx", ".xls", ".doc", ".docx"}
+app.config["MAX_CONTENT_LENGTH"] = 25 * 1024 * 1024  # 25 MB por subida
+
+
+def _guardar_adjunto(did, file):
+    """Guarda el archivo subido y devuelve el nombre almacenado (o None)."""
+    from werkzeug.utils import secure_filename
+    import uuid
+    if not file or not file.filename:
+        return None
+    ext = os.path.splitext(file.filename)[1].lower()
+    if ext not in ADJUNTO_EXT:
+        return None
+    base = secure_filename(os.path.splitext(file.filename)[0])[:60] or "adjunto"
+    stored = f"doc{did}_{uuid.uuid4().hex[:8]}_{base}{ext}"
+    file.save(os.path.join(UPLOADS, stored))
+    return stored
+
 
 @app.before_request
 def _gate():
@@ -298,6 +321,13 @@ def documento_editar(did=None):
             db.update_documento(conn, did, **payload)
         else:
             did = db.insert_documento(conn, estado="pendiente", **payload)
+        # adjunto (opcional)
+        stored = _guardar_adjunto(did, request.files.get("adjunto"))
+        if stored:
+            prev = db.get_documento(conn, did)
+            if prev and prev.get("adjunto"):
+                _borrar_archivo(prev["adjunto"])
+            db.update_documento(conn, did, adjunto=stored)
         conn.close()
         flash("Documento guardado.", "ok")
         return redirect(url_for("documento_reparto", did=did))
@@ -317,10 +347,45 @@ def documento_editar(did=None):
 @app.route("/documentos/<int:did>/borrar", methods=["POST"])
 def documento_borrar(did):
     conn = get_conn()
+    doc = db.get_documento(conn, did)
+    if doc and doc.get("adjunto"):
+        _borrar_archivo(doc["adjunto"])
     db.delete_documento(conn, did)
     conn.close()
     flash("Documento eliminado.", "ok")
     return redirect(url_for("documentos"))
+
+
+def _borrar_archivo(nombre):
+    try:
+        p = os.path.join(UPLOADS, os.path.basename(nombre))
+        if os.path.isfile(p):
+            os.remove(p)
+    except OSError:
+        pass
+
+
+@app.route("/documentos/<int:did>/adjunto")
+def documento_adjunto(did):
+    conn = get_conn()
+    doc = db.get_documento(conn, did)
+    conn.close()
+    if not doc or not doc.get("adjunto"):
+        abort(404)
+    return send_file(os.path.join(UPLOADS, os.path.basename(doc["adjunto"])),
+                     download_name=doc["adjunto"], as_attachment=False)
+
+
+@app.route("/documentos/<int:did>/adjunto/borrar", methods=["POST"])
+def documento_adjunto_borrar(did):
+    conn = get_conn()
+    doc = db.get_documento(conn, did)
+    if doc and doc.get("adjunto"):
+        _borrar_archivo(doc["adjunto"])
+        db.update_documento(conn, did, adjunto="")
+    conn.close()
+    flash("Adjunto eliminado.", "ok")
+    return redirect(url_for("documento_editar", did=did))
 
 
 # --- REPARTO ANALÍTICO (núcleo) ------------------------------------------
@@ -395,6 +460,45 @@ def reparto_guardar(did):
     db.replace_repartos(conn, did, lines)
     conn.close()
     flash(f"Reparto guardado: {len(lines)} línea(s) analítica(s).", "ok")
+    return redirect(url_for("documento_reparto", did=did))
+
+
+@app.route("/documentos/<int:did>/reparto/guardar-manual", methods=["POST"])
+def reparto_guardar_manual(did):
+    """Guarda un reparto ajustado a mano (importe por proyecto), sin re-interpretar texto."""
+    conn = get_conn()
+    doc = db.get_documento(conn, did)
+    if not doc:
+        conn.close()
+        abort(404)
+    from .allocation import parse_number
+    cod2id = {p["codigo"]: p["id"] for p in db.list_proyectos(conn)}
+    total = float(doc["importe"] or 0)
+    codigos = request.form.getlist("proyecto_codigo")
+    importes = request.form.getlist("importe")
+    lines = []
+    for cod, imp in zip(codigos, importes):
+        cod = (cod or "").strip()
+        val = parse_number(imp)
+        if not cod or val is None or float(val) == 0:
+            continue
+        valf = float(val)
+        pct = round(valf / total * 100, 2) if total else 0
+        lines.append({"proyecto_id": cod2id.get(cod), "proyecto_codigo": cod,
+                      "importe": valf, "porcentaje": pct,
+                      "base": "ajuste manual"})
+    if not lines:
+        conn.close()
+        flash("No se ha indicado ningún importe para el reparto manual.", "error")
+        return redirect(url_for("documento_reparto", did=did))
+    db.replace_repartos(conn, did, lines)
+    conn.close()
+    suma = sum(l["importe"] for l in lines)
+    dif = round(total - suma, 2)
+    msg = f"Reparto manual guardado: {len(lines)} línea(s)."
+    if abs(dif) >= 0.01:
+        msg += f" Aviso: la suma ({suma:.2f} €) difiere del total en {dif:.2f} €."
+    flash(msg, "ok")
     return redirect(url_for("documento_reparto", did=did))
 
 
@@ -542,7 +646,8 @@ def importar():
         try:
             if destino == "documentos":
                 r = importer.import_documentos(
-                    conn, data, tipo_defecto=request.form.get("tipo_defecto", "factura"))
+                    conn, data, tipo_defecto=request.form.get("tipo_defecto", "factura"),
+                    omitir_duplicados=bool(request.form.get("omitir_duplicados")))
                 msg = f"{r['importados']} documento(s) importado(s)."
                 extras = []
                 if r["cuentas_creadas"]:
@@ -555,6 +660,8 @@ def importar():
                     msg += " Creados: " + ", ".join(extras) + "."
                 if r.get("repartidos_auto"):
                     msg += f" {r['repartidos_auto']} repartido(s) automáticamente por regla de centro."
+                if r.get("duplicados"):
+                    msg += f" {r['duplicados']} duplicado(s) omitido(s)."
                 if r["errores"]:
                     msg += " Incidencias: " + " | ".join(r["errores"][:5])
             else:
@@ -622,6 +729,23 @@ def backup():
     conn.close()
     return send_file(io.BytesIO(data), as_attachment=True,
                      download_name="costcontrol_backup.json", mimetype="application/json")
+
+
+@app.route("/restaurar", methods=["POST"])
+def restaurar():
+    file = request.files.get("archivo")
+    if not file or not file.filename:
+        flash("Selecciona un archivo de copia (.json).", "error")
+        return redirect(url_for("informe"))
+    conn = get_conn()
+    r = importer.restore_backup(conn, file.read())
+    conn.close()
+    if r.get("ok"):
+        flash(f"Copia restaurada: {r.get('documentos',0)} documentos, "
+              f"{r.get('proyectos',0)} proyectos, {r.get('repartos',0)} líneas de reparto.", "ok")
+    else:
+        flash("No se pudo restaurar: " + r.get("error", "error desconocido"), "error")
+    return redirect(url_for("index"))
 
 
 @app.route("/informe/exportar")
