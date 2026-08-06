@@ -265,8 +265,9 @@ def import_maestro(conn, file_bytes: bytes, clase: str) -> Dict[str, Any]:
 
 
 # --- Exportación ----------------------------------------------------------
-_HEAD_FILL = PatternFill("solid", fgColor="1F3A5F")
-_HEAD_FONT = Font(bold=True, color="FFFFFF")
+# Cabeceras con la identidad corporativa: negro con texto verde lima.
+_HEAD_FILL = PatternFill("solid", fgColor="101211")
+_HEAD_FONT = Font(bold=True, color="8FDC1F")
 
 
 def _style_header(ws, ncols):

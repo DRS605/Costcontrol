@@ -50,6 +50,10 @@ nav.main a {
 }
 nav.main a:hover { background: rgba(255,255,255,.10); text-decoration: none; color: #fff; }
 nav.main a.active { background: var(--lime); color: #101211; font-weight: 600; }
+.nav-salir { color:#cfd3cf; font-size:13.5px; font-weight:600; padding:7px 12px;
+  border:1px solid rgba(255,255,255,.18); border-radius:7px; white-space:nowrap; }
+.nav-salir:hover { background:rgba(255,255,255,.10); color:#fff; text-decoration:none; }
+.foot-tag { color:var(--brand-2); letter-spacing:2.5px; font-size:11px; font-weight:600; }
 
 .wrap { max-width: 1180px; margin: 26px auto; padding: 0 22px; }
 h1 { font-size: 23px; margin: 0 0 4px; }

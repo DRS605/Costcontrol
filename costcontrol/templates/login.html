@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Acceso · CostControl</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 120 120'><rect width='120' height='120' rx='26' fill='%23101211'/><path d='M 97.7 33.6 A 46 46 0 1 0 97.7 86.4' fill='none' stroke='white' stroke-width='13' stroke-linecap='round'/><path d='M 79.1 40.9 A 27 27 0 1 0 79.1 79.1' fill='none' stroke='%238fdc1f' stroke-width='13' stroke-linecap='round'/></svg>">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <style>
+    body { background:#0b0c0b; display:grid; place-items:center; min-height:100vh; }
+    .login-wrap { text-align:center; padding:24px; width:100%; max-width:400px; }
+    .login-mark { width:132px; height:132px; margin:0 auto 6px; display:block; }
+    .login-name { font-size:34px; font-weight:800; letter-spacing:2px; color:#fff; }
+    .login-name .g { color:var(--lime); }
+    .login-tag { color:#8b948b; letter-spacing:3px; font-size:12.5px; margin:8px 0 26px;
+      display:flex; align-items:center; gap:10px; justify-content:center; }
+    .login-tag::before, .login-tag::after { content:""; height:1px; width:26px; background:var(--lime); }
+    form.login { background:#151715; border:1px solid #262a26; border-radius:14px; padding:22px; }
+    form.login label { color:#9aa39a; text-align:left; }
+    form.login input { background:#0e100e; border-color:#2b302b; color:#fff; }
+    form.login input:focus { outline-color:var(--lime); border-color:var(--lime); }
+    .login-btn { width:100%; margin-top:16px; background:var(--lime); color:#101211;
+      border:none; padding:11px; border-radius:9px; font-weight:700; font-size:15px; cursor:pointer; }
+    .login-btn:hover { background:var(--lime-dark); }
+    .login-err { background:#2a1414; border:1px solid #5a2020; color:#ff8f8a;
+      border-radius:8px; padding:9px; font-size:13.5px; margin-bottom:14px; }
+    .login-foot { color:#4c534c; font-size:12px; margin-top:20px; }
+  </style>
+</head>
+<body>
+  <div class="login-wrap">
+    <svg class="login-mark" viewBox="0 0 120 120" aria-hidden="true">
+      <path d="M 97.7 33.6 A 46 46 0 1 0 97.7 86.4" fill="none" stroke="#ffffff"
+            stroke-width="13" stroke-linecap="round"/>
+      <path d="M 79.1 40.9 A 27 27 0 1 0 79.1 79.1" fill="none" stroke="#8fdc1f"
+            stroke-width="13" stroke-linecap="round"/>
+    </svg>
+    <div class="login-name">COST<span class="g">CONTROL</span></div>
+    <div class="login-tag">CONTROLA · ANALIZA · OPTIMIZA</div>
+    <form class="login" method="post">
+      {% if error %}<div class="login-err">Contraseña incorrecta.</div>{% endif %}
+      <label>Contraseña</label>
+      <input type="password" name="password" autofocus required placeholder="••••••••">
+      <button class="login-btn" type="submit">Entrar</button>
+    </form>
+    <div class="login-foot">Control de costes por proyectos y estructuras de gasto</div>
+  </div>
+</body>
+</html>

@@ -31,6 +31,7 @@
       <a href="{{ url_for('importar') }}" class="{{ 'active' if ep=='importar' }}">Importar</a>
       <a href="{{ url_for('informe') }}" class="{{ 'active' if ep and ep.startswith('informe') }}">Informe</a>
     </nav>
+    {% if auth_activo %}<a href="{{ url_for('logout') }}" class="nav-salir" title="Cerrar sesión">Salir</a>{% endif %}
   </header>
   <div class="wrap">
     {% with messages = get_flashed_messages(with_categories=true) %}
@@ -40,7 +41,10 @@
     {% endwith %}
     {% block body %}{% endblock %}
   </div>
-  <footer>CostControl v{{ version }} · control de costes por proyectos y estructuras de gasto</footer>
+  <footer>
+    <span class="foot-tag">CONTROLA · ANALIZA · OPTIMIZA</span><br>
+    CostControl v{{ version }} · control de costes por proyectos y estructuras de gasto
+  </footer>
   {% block scripts %}{% endblock %}
 </body>
 </html>
