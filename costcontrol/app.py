@@ -130,6 +130,21 @@ def index():
         "aviso": [s for s in seg if s["estado"] == "aviso"],
         "ejercicio": ej_pres,
     }
+    # comparativa año actual vs. anterior
+    comp = None
+    if ej_pres:
+        s_act = {s["periodo"]: s["importe"] for s in db.serie_mensual(conn, ej_pres)}
+        s_ant = {s["periodo"]: s["importe"] for s in db.serie_mensual(conn, ej_pres - 1)}
+        tot_act = sum(s_act.values())
+        tot_ant = sum(s_ant.values())
+        if tot_act or tot_ant:
+            datos_comp = [(MESES[m], s_ant.get(m, 0), s_act.get(m, 0)) for m in range(1, 13)]
+            comp = {
+                "ej_act": ej_pres, "ej_ant": ej_pres - 1,
+                "tot_act": tot_act, "tot_ant": tot_ant,
+                "var": ((tot_act - tot_ant) / tot_ant * 100) if tot_ant else None,
+                "grafico": charts.barras_comparativa(datos_comp),
+            }
     conn.close()
 
     # gráficos SVG
@@ -145,7 +160,7 @@ def index():
                            por_centro=por_centro, ejercicios=ejercicios_l,
                            ejercicio_sel=ejercicio, graf_centro=graf_centro,
                            graf_proyecto=graf_proyecto, graf_mensual=graf_mensual,
-                           hay_serie=bool(serie_datos), alertas=alertas)
+                           hay_serie=bool(serie_datos), alertas=alertas, comp=comp)
 
 
 # --- proyectos ------------------------------------------------------------

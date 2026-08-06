@@ -87,3 +87,38 @@ def barras_verticales(datos: Sequence[Tuple[str, float]], *, ancho: int = 560,
         f'class="chart chart-vert" style="max-height:260px" '
         f'preserveAspectRatio="xMidYMin meet">{"".join(marks)}</svg>'
     )
+
+
+def barras_comparativa(datos, *, ancho: int = 680, alto: int = 230) -> str:
+    """Comparativa por mes de dos ejercicios. datos = [(mes, año_anterior, año_actual), ...].
+
+    El año anterior se dibuja en gris (referencia) y el actual en verde.
+    """
+    datos = [(str(l), float(a or 0), float(b or 0)) for l, a, b in datos]
+    if not datos:
+        return '<p class="empty">Sin datos.</p>'
+    maxv = max((max(a, b) for _, a, b in datos), default=0) or 1
+    pad_b, pad_t, pad_l = 24, 14, 8
+    plot_h = alto - pad_b - pad_t
+    n = len(datos)
+    slot = (ancho - pad_l * 2) / n
+    bw = min(18, slot * 0.32)
+    gap = 3
+    marks = []
+    for i, (label, ant, act) in enumerate(datos):
+        x0 = pad_l + slot * i + (slot - (bw * 2 + gap)) / 2
+        for j, (val, cls) in enumerate([(ant, "chart-bar-prev"), (act, "chart-bar")]):
+            h = max(0, plot_h * (val / maxv))
+            x = x0 + j * (bw + gap)
+            y = pad_t + (plot_h - h)
+            marks.append(
+                f'<rect x="{x:.1f}" y="{y:.1f}" width="{bw:.1f}" height="{h:.1f}" '
+                f'rx="3" class="{cls}"><title>{escape(label)}: {_eur(val)}</title></rect>')
+        marks.append(
+            f'<text x="{pad_l + slot*i + slot/2:.1f}" y="{alto-8}" text-anchor="middle" '
+            f'class="chart-label" font-size="11">{escape(label)}</text>')
+    return (
+        f'<svg viewBox="0 0 {ancho} {alto}" width="100%" role="img" '
+        f'class="chart chart-vert" style="max-height:250px" '
+        f'preserveAspectRatio="xMidYMin meet">{"".join(marks)}</svg>'
+    )

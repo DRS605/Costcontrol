@@ -205,9 +205,9 @@ def run():
 
     # cierre de periodo bloquea el reparto
     conn = db.connect()
-    docs1 = [d for d in db.list_documentos(conn) if d["periodo"] == 1]
+    docs1 = [d for d in db.list_documentos(conn) if d["ejercicio"] == 2026 and d["periodo"] == 1]
     conn.close()
-    assert docs1, "no hay documentos en el periodo 1 para probar el cierre"
+    assert docs1, "no hay documentos en 2026-01 para probar el cierre"
     did1 = docs1[0]["id"]
     client.post("/cierres/cambiar",
                 data={"ejercicio": "2026", "periodo": "1", "accion": "cerrar"},

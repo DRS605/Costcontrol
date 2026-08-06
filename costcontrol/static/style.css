@@ -50,6 +50,20 @@ nav.main a {
 }
 nav.main a:hover { background: rgba(255,255,255,.10); text-decoration: none; color: #fff; }
 nav.main a.active { background: var(--lime); color: #101211; font-weight: 600; }
+/* menús desplegables */
+.dd { position: relative; }
+.dd-btn { background: transparent; border: none; color: #cfd3cf; padding: 8px 13px;
+  border-radius: 7px; font-size: 14px; font-weight: 500; cursor: pointer; font-family: inherit; }
+.dd-btn:hover { background: rgba(255,255,255,.10); color: #fff; }
+.dd-btn.active { background: var(--lime); color: #101211; font-weight: 600; }
+.dd-btn .caret { font-size: 10px; opacity: .8; }
+.dd-menu { position: absolute; top: calc(100% + 6px); left: 0; min-width: 190px;
+  background: #1b1e1b; border: 1px solid #2c302c; border-radius: 10px; padding: 6px;
+  box-shadow: 0 8px 24px rgba(0,0,0,.35); display: none; z-index: 60; }
+.dd.open .dd-menu { display: block; }
+.dd-menu a { display: block; color: #d7dbd7; padding: 8px 12px; border-radius: 6px;
+  font-size: 14px; white-space: nowrap; }
+.dd-menu a:hover { background: rgba(255,255,255,.08); color: #fff; text-decoration: none; }
 .nav-salir { color:#cfd3cf; font-size:13.5px; font-weight:600; padding:7px 12px;
   border:1px solid rgba(255,255,255,.18); border-radius:7px; white-space:nowrap; }
 .nav-salir:hover { background:rgba(255,255,255,.10); color:#fff; text-decoration:none; }
@@ -172,9 +186,16 @@ textarea { resize: vertical; min-height: 70px; }
 }
 .chart { display: block; max-width: 100%; height: auto; }
 .chart .chart-bar { fill: var(--series-1); stroke: var(--series-1-edge); stroke-width: .75; }
+.chart .chart-bar-prev { fill: #c3c9c3; }
 .chart .chart-label { fill: var(--chart-text); }
 .chart .chart-value { fill: var(--chart-value); font-variant-numeric: tabular-nums; }
 .chart-card { min-height: 60px; }
+.legend { color: var(--muted); display: flex; align-items: center; }
+.lg { display: inline-block; width: 12px; height: 12px; border-radius: 3px; vertical-align: middle; margin-right: 4px; }
+.lg-act { background: var(--series-1); }
+.lg-prev { background: #c3c9c3; }
+.comp-totals { display: flex; gap: 30px; margin: 6px 0 14px; }
+.comp-totals b { display: block; font-size: 20px; }
 .split { display: grid; grid-template-columns: 1.1fr .9fr; gap: 20px; align-items: start; }
 @media (max-width: 900px) { .split { grid-template-columns: 1fr; } }
 

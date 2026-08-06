@@ -51,6 +51,13 @@ def seed():
         dict(tipo="factura", numero="F-2026/021", fecha="2026-03-05",
              tercero="Suministros Levante SL", tercero_id=t1, concepto="Material eléctrico",
              importe=1980.00, iva_pct=21, cuenta_id=c600, centro_id=obras),
+        # ejercicio anterior (para la comparativa año vs año)
+        dict(tipo="factura", numero="F-2025/044", fecha="2025-01-18",
+             tercero="Suministros Levante SL", tercero_id=t1, concepto="Material de obra",
+             importe=2900.00, iva_pct=21, cuenta_id=c600, centro_id=obras),
+        dict(tipo="factura", numero="F-2025/061", fecha="2025-02-22",
+             tercero="Cementos del Turia", tercero_id=t3, concepto="Hormigón",
+             importe=6100.00, iva_pct=21, cuenta_id=c600, centro_id=obras),
     ]
     for d in docs:
         db.insert_documento(conn, estado="pendiente", **d)

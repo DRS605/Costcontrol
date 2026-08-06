@@ -38,9 +38,10 @@ herramienta traduce ese texto libre a líneas analíticas concretas.
   documentos que importas de un centro con regla se reparten **automáticamente**.
 - 🧾 **Modelo contable real**: IVA (base imponible, cuota y total), ejercicios y
   periodos, y maestro de **terceros** (proveedores/clientes con NIF).
-- 📊 **Panel con gráficos** (evolución mensual, coste por proyecto y por centro)
-  e **informe analítico** por proyecto (presupuesto vs. imputado, desviación,
-  detalle de líneas), por centro y **por cuenta contable**, exportable a Excel.
+- 📊 **Panel con gráficos** (evolución mensual, coste por proyecto y por centro,
+  y **comparativa año vs. año anterior** con variación) e **informe analítico**
+  por proyecto (presupuesto vs. imputado, desviación, detalle de líneas), por
+  centro y **por cuenta contable**, exportable a Excel.
 - 🔎 **Búsqueda y filtros avanzados** en documentos (texto, fechas, importe,
   ejercicio/periodo, centro, cuenta) y **exportación** de la vista filtrada.
 - 🎯 **Presupuestos por proyecto y periodo** (mensual; el anual es la suma), con

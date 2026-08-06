@@ -18,19 +18,37 @@
       </svg>
       <span><span class="wm-cost">COST</span><span class="wm-control">CONTROL</span></span>
     </a>
+    {% set ep = request.endpoint or '' %}
+    {% set g_oper = ep.startswith('documento') or ep.startswith('reparto') or ep in ['importar','importar_previsualizar'] %}
+    {% set g_maestros = ep.startswith('proyectos') or ep.startswith('centros') or ep.startswith('cuentas') or ep.startswith('terceros') or ep.startswith('reglas') %}
+    {% set g_analisis = ep.startswith('informe') or ep.startswith('presupuestos') or ep.startswith('cierres') or ep in ['backup','restaurar'] %}
     <nav class="main">
-      {% set ep = request.endpoint or '' %}
       <a href="{{ url_for('index') }}" class="{{ 'active' if ep=='index' }}">Panel</a>
-      <a href="{{ url_for('documentos') }}" class="{{ 'active' if ep and ep.startswith('documento') }}">Documentos</a>
-      <a href="{{ url_for('reparto_masivo') }}" class="{{ 'active' if ep and ep.startswith('reparto_masivo') }}">Reparto masivo</a>
-      <a href="{{ url_for('proyectos') }}" class="{{ 'active' if ep and ep.startswith('proyectos') }}">Proyectos</a>
-      <a href="{{ url_for('centros') }}" class="{{ 'active' if ep and ep.startswith('centros') }}">Centros</a>
-      <a href="{{ url_for('cuentas') }}" class="{{ 'active' if ep and ep.startswith('cuentas') }}">Cuentas</a>
-      <a href="{{ url_for('presupuestos') }}" class="{{ 'active' if ep and (ep.startswith('presupuestos') or ep.startswith('cierres')) }}">Presupuestos</a>
-      <a href="{{ url_for('terceros') }}" class="{{ 'active' if ep and ep.startswith('terceros') }}">Terceros</a>
-      <a href="{{ url_for('reglas') }}" class="{{ 'active' if ep and ep.startswith('reglas') }}">Reglas</a>
-      <a href="{{ url_for('importar') }}" class="{{ 'active' if ep=='importar' }}">Importar</a>
-      <a href="{{ url_for('informe') }}" class="{{ 'active' if ep and ep.startswith('informe') }}">Informe</a>
+      <div class="dd">
+        <button type="button" class="dd-btn {{ 'active' if g_oper }}" data-dd>Operativa <span class="caret">▾</span></button>
+        <div class="dd-menu">
+          <a href="{{ url_for('documentos') }}">Documentos</a>
+          <a href="{{ url_for('reparto_masivo') }}">Reparto masivo</a>
+          <a href="{{ url_for('importar') }}">Importar</a>
+        </div>
+      </div>
+      <div class="dd">
+        <button type="button" class="dd-btn {{ 'active' if g_maestros }}" data-dd>Maestros <span class="caret">▾</span></button>
+        <div class="dd-menu">
+          <a href="{{ url_for('proyectos') }}">Proyectos</a>
+          <a href="{{ url_for('centros') }}">Centros</a>
+          <a href="{{ url_for('cuentas') }}">Cuentas</a>
+          <a href="{{ url_for('terceros') }}">Terceros</a>
+          <a href="{{ url_for('reglas') }}">Reglas de reparto</a>
+        </div>
+      </div>
+      <div class="dd">
+        <button type="button" class="dd-btn {{ 'active' if g_analisis }}" data-dd>Análisis <span class="caret">▾</span></button>
+        <div class="dd-menu">
+          <a href="{{ url_for('informe') }}">Informe analítico</a>
+          <a href="{{ url_for('presupuestos') }}">Presupuestos y cierre</a>
+        </div>
+      </div>
     </nav>
     {% if auth_activo %}<a href="{{ url_for('logout') }}" class="nav-salir" title="Cerrar sesión">Salir</a>{% endif %}
   </header>
@@ -46,6 +64,19 @@
     <span class="foot-tag">CONTROLA · ANALIZA · OPTIMIZA</span><br>
     CostControl v{{ version }} · control de costes por proyectos y estructuras de gasto
   </footer>
+  <script>
+    // menús desplegables de la navegación
+    document.querySelectorAll('.dd-btn[data-dd]').forEach(btn=>{
+      btn.addEventListener('click', e=>{
+        e.stopPropagation();
+        const dd = btn.parentNode;
+        const open = dd.classList.contains('open');
+        document.querySelectorAll('.dd.open').forEach(d=> d.classList.remove('open'));
+        if(!open) dd.classList.add('open');
+      });
+    });
+    document.addEventListener('click', ()=> document.querySelectorAll('.dd.open').forEach(d=> d.classList.remove('open')));
+  </script>
   {% block scripts %}{% endblock %}
 </body>
 </html>

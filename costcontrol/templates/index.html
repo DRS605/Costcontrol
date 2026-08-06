@@ -59,6 +59,29 @@
 </div>
 {% endif %}
 
+{% if comp %}
+<div class="card chart-card">
+  <div class="actions" style="justify-content:space-between; align-items:center">
+    <h2 style="margin:0">Comparativa anual · {{ comp.ej_act }} vs {{ comp.ej_ant }}</h2>
+    <div class="legend small">
+      <span class="lg lg-prev"></span> {{ comp.ej_ant }}
+      <span class="lg lg-act" style="margin-left:12px"></span> {{ comp.ej_act }}
+    </div>
+  </div>
+  <div class="comp-totals">
+    <div><span class="small muted">{{ comp.ej_ant }}</span><b>{{ comp.tot_ant | eur }}</b></div>
+    <div><span class="small muted">{{ comp.ej_act }}</span><b>{{ comp.tot_act | eur }}</b></div>
+    <div><span class="small muted">Variación</span>
+      {% if comp.var is not none %}
+        <b style="color: {{ '#b3261e' if comp.var > 0 else '#4f9a10' }}">
+          {{ '▲' if comp.var > 0 else '▼' }} {{ '%+.1f'|format(comp.var) }}%</b>
+      {% else %}<b class="muted">—</b>{% endif %}
+    </div>
+  </div>
+  {{ comp.grafico | safe }}
+</div>
+{% endif %}
+
 <div class="grid cols2">
   <div class="card chart-card">
     <h2>Coste imputado por proyecto</h2>
