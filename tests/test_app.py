@@ -190,6 +190,43 @@ def run():
     assert n_rest > 0, "la restauración dejó la base vacía"
     print("  ok  restaurar copia de seguridad"); ok += 1
 
+    # páginas nuevas
+    assert client.get("/presupuestos").status_code == 200
+    print("  ok  GET /presupuestos"); ok += 1
+
+    # presupuesto mensual -> anual = suma
+    conn = db.connect(); pid = db.list_proyectos(conn)[0]["id"]; conn.close()
+    client.post("/presupuestos/guardar",
+                data={"ejercicio": "2026", f"pres_{pid}_1": "1000", f"pres_{pid}_2": "500"},
+                follow_redirects=True)
+    conn = db.connect(); anual = db.presupuesto_anual(conn, pid, 2026); conn.close()
+    assert abs(anual - 1500) < 0.01, anual
+    print("  ok  presupuesto mensual y anual"); ok += 1
+
+    # cierre de periodo bloquea el reparto
+    conn = db.connect()
+    docs1 = [d for d in db.list_documentos(conn) if d["periodo"] == 1]
+    conn.close()
+    assert docs1, "no hay documentos en el periodo 1 para probar el cierre"
+    did1 = docs1[0]["id"]
+    client.post("/cierres/cambiar",
+                data={"ejercicio": "2026", "periodo": "1", "accion": "cerrar"},
+                follow_redirects=True)
+    conn = db.connect(); cerrado = db.is_cerrado(conn, 2026, 1); conn.close()
+    assert cerrado, "el periodo no quedó cerrado"
+    r = client.post(f"/documentos/{did1}/reparto/guardar",
+                    data={"texto": "todo a PROY-A"}, follow_redirects=True)
+    assert "cerrado".encode() in r.data.lower(), "no se bloqueó el reparto en periodo cerrado"
+    print("  ok  cierre de periodo bloquea el reparto"); ok += 1
+
+    # reabrir
+    client.post("/cierres/cambiar",
+                data={"ejercicio": "2026", "periodo": "1", "accion": "abrir"},
+                follow_redirects=True)
+    conn = db.connect(); reabierto = not db.is_cerrado(conn, 2026, 1); conn.close()
+    assert reabierto
+    print("  ok  reabrir periodo"); ok += 1
+
     print(f"\nTODO OK ({ok} comprobaciones)")
 
 

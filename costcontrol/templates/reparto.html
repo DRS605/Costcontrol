@@ -22,6 +22,10 @@
   {% if doc.concepto %}<p class="small muted" style="margin:10px 0 0">{{ doc.concepto }}</p>{% endif %}
 </div>
 
+{% if cerrado %}
+<div class="flash error">🔒 Este documento está en un <b>periodo cerrado</b>. No se puede modificar su reparto. Reábrelo en <a href="{{ url_for('presupuestos', ejercicio=doc.ejercicio) }}">Presupuestos y cierre</a> si necesitas cambiarlo.</div>
+{% endif %}
+
 <div class="split">
   <div class="card">
     <h2>Escribe el reparto a mano</h2>

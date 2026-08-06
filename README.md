@@ -43,6 +43,11 @@ herramienta traduce ese texto libre a líneas analíticas concretas.
   detalle de líneas), por centro y **por cuenta contable**, exportable a Excel.
 - 🔎 **Búsqueda y filtros avanzados** en documentos (texto, fechas, importe,
   ejercicio/periodo, centro, cuenta) y **exportación** de la vista filtrada.
+- 🎯 **Presupuestos por proyecto y periodo** (mensual; el anual es la suma), con
+  **seguimiento y alertas de desviación** (semáforo verde/ámbar/rojo) en la
+  página de presupuestos y en el panel.
+- 🔒 **Cierre de periodo**: cierra un mes y sus documentos quedan bloqueados (no
+  se pueden crear, editar, borrar, repartir ni importar); reversible.
 - ✋ **Ajuste manual del reparto** línea a línea, con indicador de cuadre en
   vivo (puedes traer al editor lo que traduce el texto y afinarlo a mano).
 - 📎 **Adjuntar la factura/albarán** (PDF o imagen) a cada documento.

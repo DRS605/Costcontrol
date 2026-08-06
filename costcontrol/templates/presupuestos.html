@@ -1,0 +1,125 @@
+{% extends "base.html" %}
+{% block title %}Presupuestos y cierre · CostControl{% endblock %}
+{% block body %}
+<div class="actions" style="justify-content:space-between; align-items:flex-end">
+  <div>
+    <h1>Presupuestos y cierre</h1>
+    <p class="subtitle">Presupuesto por proyecto y periodo, seguimiento con alertas y cierre de meses.</p>
+  </div>
+  <form method="get" class="inline-form">
+    <div><label>Ejercicio</label>
+      <select name="ejercicio" onchange="this.form.submit()">
+        {% for e in anios %}<option value="{{ e }}" {{ 'selected' if ejercicio==e }}>{{ e }}</option>{% endfor %}
+      </select>
+    </div>
+  </form>
+</div>
+
+<div class="card">
+  <h2>Seguimiento presupuestario {{ ejercicio }}</h2>
+  {% if seguimiento %}
+  <div class="table-wrap">
+  <table>
+    <thead><tr><th>Proyecto</th><th class="num">Presupuesto</th><th class="num">Imputado</th><th class="num">Desviación</th><th style="width:150px">Consumo</th><th>Estado</th></tr></thead>
+    <tbody>
+    {% for s in seguimiento %}
+      <tr>
+        <td><b>{{ s.codigo }}</b> <span class="small muted">{{ s.nombre }}</span></td>
+        <td class="num">{{ s.presupuesto | eur }}</td>
+        <td class="num">{{ s.imputado | eur }}</td>
+        <td class="num" style="color: {{ '#b3261e' if s.desviacion < 0 else '#4f9a10' }}">{{ s.desviacion | eur }}</td>
+        <td>
+          <div class="bar"><span class="{{ 'over' if s.pct > 100 }}" style="width: {{ [s.pct,100]|min }}%"></span></div>
+          <span class="small muted">{{ '%.0f'|format(s.pct) }}%</span>
+        </td>
+        <td>
+          {% if s.estado=='excedido' %}<span class="badge b-excedido">⛔ Excedido</span>
+          {% elif s.estado=='aviso' %}<span class="badge b-aviso">⚠ Cerca del límite</span>
+          {% elif s.estado=='ok' %}<span class="badge b-ok">✓ En presupuesto</span>
+          {% else %}<span class="badge b-none">Sin presupuesto</span>{% endif %}
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% else %}
+  <div class="empty">No hay proyectos. <a href="{{ url_for('proyectos') }}">Crea alguno</a>.</div>
+  {% endif %}
+</div>
+
+<div class="card">
+  <div class="actions" style="justify-content:space-between">
+    <h2 style="margin:0">Presupuesto mensual {{ ejercicio }}</h2>
+    <span class="small muted">Importes en € · el anual es la suma de los meses</span>
+  </div>
+  {% if proyectos %}
+  <form method="post" action="{{ url_for('presupuestos_guardar') }}">
+    <input type="hidden" name="ejercicio" value="{{ ejercicio }}">
+    <div class="table-wrap">
+    <table class="pres-table">
+      <thead><tr><th style="min-width:150px">Proyecto</th>
+        {% for m in range(1,13) %}<th class="num">{{ meses[m] }}</th>{% endfor %}
+        <th class="num">Anual</th></tr></thead>
+      <tbody>
+      {% for p in proyectos %}
+        <tr data-pid="{{ p.id }}">
+          <td><b>{{ p.codigo }}</b></td>
+          {% for m in range(1,13) %}
+          <td><input name="pres_{{ p.id }}_{{ m }}" class="pres-in"
+                     value="{{ pres.get(p.id,{}).get(m,'') or '' }}" inputmode="decimal"
+                     style="width:80px; text-align:right; padding:6px"></td>
+          {% endfor %}
+          <td class="num"><b class="pres-anual">0</b></td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    </div>
+    <div class="actions" style="margin-top:14px">
+      <button class="btn accent" type="submit">Guardar presupuestos</button>
+    </div>
+  </form>
+  {% else %}
+  <div class="empty">Sin proyectos.</div>
+  {% endif %}
+</div>
+
+<div class="card">
+  <h2>Cierre de periodos {{ ejercicio }}</h2>
+  <p class="small muted">Al cerrar un mes, sus documentos no se pueden crear, editar, borrar ni repartir.</p>
+  <div class="cierre-grid">
+    {% for m in range(1,13) %}
+      {% set cerrado = (ejercicio, m) in cerrados %}
+      <form method="post" action="{{ url_for('cierres_cambiar') }}" class="cierre-item {{ 'cerrado' if cerrado }}">
+        <input type="hidden" name="ejercicio" value="{{ ejercicio }}">
+        <input type="hidden" name="periodo" value="{{ m }}">
+        <div class="cierre-mes">{{ meses[m] }}</div>
+        {% if cerrado %}
+          <div class="cierre-estado">🔒 Cerrado</div>
+          <button name="accion" value="abrir" class="btn sec sm">Reabrir</button>
+        {% else %}
+          <div class="cierre-estado abierto">Abierto</div>
+          <button name="accion" value="cerrar" class="btn sec sm">Cerrar</button>
+        {% endif %}
+      </form>
+    {% endfor %}
+  </div>
+</div>
+
+{% block scripts %}
+<script>
+function recalcPres(){
+  document.querySelectorAll('tr[data-pid]').forEach(tr=>{
+    let s=0;
+    tr.querySelectorAll('.pres-in').forEach(i=>{
+      const v=parseFloat((i.value||'').replace(/\./g,'').replace(',','.')); if(!isNaN(v)) s+=v;
+    });
+    tr.querySelector('.pres-anual').textContent = new Intl.NumberFormat('es-ES',{style:'currency',currency:'EUR'}).format(s);
+  });
+}
+document.querySelectorAll('.pres-in').forEach(i=> i.addEventListener('input', recalcPres));
+recalcPres();
+</script>
+{% endblock %}
+{% endblock %}

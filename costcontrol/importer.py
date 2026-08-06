@@ -75,7 +75,7 @@ def _clave_doc(numero, importe) -> str:
 
 def import_documentos(conn, file_bytes: bytes, tipo_defecto: str = "factura",
                       crear_maestros: bool = True, aplicar_reglas: bool = True,
-                      omitir_duplicados: bool = True) -> Dict[str, Any]:
+                      omitir_duplicados: bool = True, cerrados=None) -> Dict[str, Any]:
     """Importa documentos desde un Excel. Crea cuentas/centros/terceros si no existen.
 
     Si un centro tiene una regla de reparto por defecto, se aplica automáticamente
@@ -88,9 +88,10 @@ def import_documentos(conn, file_bytes: bytes, tipo_defecto: str = "factura",
     rows = list(ws.iter_rows(values_only=True))
     wb.close()
 
+    cerrados = cerrados or set()
     result = {"importados": 0, "errores": [], "cuentas_creadas": 0,
               "centros_creados": 0, "terceros_creados": 0, "repartidos_auto": 0,
-              "duplicados": 0}
+              "duplicados": 0, "cerrados_omitidos": 0}
     if len(rows) < 2:
         result["errores"].append("El archivo no tiene filas de datos.")
         return result
@@ -137,6 +138,16 @@ def import_documentos(conn, file_bytes: bytes, tipo_defecto: str = "factura",
                 result["duplicados"] += 1
                 continue
             existentes.add(clave)
+
+        # fecha normalizada y control de periodo cerrado
+        fecha = cell("fecha")
+        if fecha is not None and hasattr(fecha, "strftime"):
+            fecha = fecha.strftime("%Y-%m-%d")
+        fecha = str(fecha or "").strip()
+        ej, per = db.periodo_desde_fecha(fecha)
+        if cerrados and ej and per and (ej, per) in cerrados:
+            result["cerrados_omitidos"] += 1
+            continue
 
         tipo = _norm(cell("tipo")) or tipo_defecto
         if "albaran" in tipo:
@@ -189,15 +200,11 @@ def import_documentos(conn, file_bytes: bytes, tipo_defecto: str = "factura",
         iva_pct = parse_number(cell("iva_pct")) if cell("iva_pct") is not None else None
         iva_importe = parse_number(cell("iva_importe")) if cell("iva_importe") is not None else None
 
-        fecha = cell("fecha")
-        if fecha is not None and hasattr(fecha, "strftime"):
-            fecha = fecha.strftime("%Y-%m-%d")
-
         did = db.insert_documento(
             conn,
             tipo=tipo,
             numero=numero_val,
-            fecha=str(fecha or "").strip(),
+            fecha=fecha,
             tercero=tercero_txt,
             tercero_id=tercero_id,
             concepto=str(cell("concepto") or "").strip(),

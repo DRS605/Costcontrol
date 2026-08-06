@@ -55,6 +55,22 @@ nav.main a.active { background: var(--lime); color: #101211; font-weight: 600; }
 .nav-salir:hover { background:rgba(255,255,255,.10); color:#fff; text-decoration:none; }
 .foot-tag { color:var(--brand-2); letter-spacing:2.5px; font-size:11px; font-weight:600; }
 
+/* estados de presupuesto (semáforo) */
+.badge.b-ok { background:var(--ok-bg); color:var(--ok); }
+.badge.b-aviso { background:#fdf1e0; color:#a86a12; }
+.badge.b-excedido { background:var(--err-bg); color:var(--err); }
+.badge.b-none { background:#eef2f7; color:var(--muted); }
+.pres-table input { background:#fff; }
+.pres-table th, .pres-table td { padding:6px 8px; }
+/* rejilla de cierre de periodos */
+.cierre-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(130px,1fr)); gap:10px; }
+.cierre-item { background:#f8fafc; border:1px solid var(--line); border-radius:10px;
+  padding:12px; text-align:center; }
+.cierre-item.cerrado { background:#fbe6e5; border-color:#f0c5c2; }
+.cierre-mes { font-weight:700; margin-bottom:4px; }
+.cierre-estado { font-size:12.5px; color:var(--err); font-weight:600; margin-bottom:8px; }
+.cierre-estado.abierto { color:var(--ok); }
+
 .wrap { max-width: 1180px; margin: 26px auto; padding: 0 22px; }
 h1 { font-size: 23px; margin: 0 0 4px; }
 h2 { font-size: 18px; margin: 26px 0 12px; }

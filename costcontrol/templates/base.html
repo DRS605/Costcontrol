@@ -26,6 +26,7 @@
       <a href="{{ url_for('proyectos') }}" class="{{ 'active' if ep and ep.startswith('proyectos') }}">Proyectos</a>
       <a href="{{ url_for('centros') }}" class="{{ 'active' if ep and ep.startswith('centros') }}">Centros</a>
       <a href="{{ url_for('cuentas') }}" class="{{ 'active' if ep and ep.startswith('cuentas') }}">Cuentas</a>
+      <a href="{{ url_for('presupuestos') }}" class="{{ 'active' if ep and (ep.startswith('presupuestos') or ep.startswith('cierres')) }}">Presupuestos</a>
       <a href="{{ url_for('terceros') }}" class="{{ 'active' if ep and ep.startswith('terceros') }}">Terceros</a>
       <a href="{{ url_for('reglas') }}" class="{{ 'active' if ep and ep.startswith('reglas') }}">Reglas</a>
       <a href="{{ url_for('importar') }}" class="{{ 'active' if ep=='importar' }}">Importar</a>

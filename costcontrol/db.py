@@ -88,6 +88,22 @@ CREATE TABLE IF NOT EXISTS reglas (
     texto TEXT NOT NULL,
     creado TEXT DEFAULT (datetime('now'))
 );
+
+CREATE TABLE IF NOT EXISTS presupuestos (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    proyecto_id INTEGER NOT NULL REFERENCES proyectos(id) ON DELETE CASCADE,
+    ejercicio INTEGER NOT NULL,
+    periodo INTEGER NOT NULL DEFAULT 0,   -- 1-12 mes; 0 = anual
+    importe REAL NOT NULL DEFAULT 0,
+    UNIQUE(proyecto_id, ejercicio, periodo)
+);
+
+CREATE TABLE IF NOT EXISTS cierres (
+    ejercicio INTEGER NOT NULL,
+    periodo INTEGER NOT NULL,             -- mes 1-12
+    cerrado_el TEXT DEFAULT (datetime('now')),
+    PRIMARY KEY (ejercicio, periodo)
+);
 """
 
 
@@ -532,3 +548,105 @@ def ejercicios(conn) -> List[int]:
         "SELECT DISTINCT ejercicio FROM documentos WHERE ejercicio IS NOT NULL ORDER BY ejercicio DESC"
     ).fetchall()
     return [r["ejercicio"] for r in rows]
+
+
+# --- Presupuestos ---------------------------------------------------------
+def get_presupuestos(conn, ejercicio: int) -> Dict[int, Dict[int, float]]:
+    """Devuelve {proyecto_id: {periodo: importe}} para un ejercicio."""
+    out: Dict[int, Dict[int, float]] = {}
+    for r in conn.execute(
+            "SELECT proyecto_id, periodo, importe FROM presupuestos WHERE ejercicio=?",
+            (int(ejercicio),)).fetchall():
+        out.setdefault(r["proyecto_id"], {})[r["periodo"]] = r["importe"]
+    return out
+
+
+def set_presupuesto(conn, proyecto_id, ejercicio, periodo, importe) -> None:
+    importe = float(importe or 0)
+    with conn:
+        if importe == 0:
+            conn.execute(
+                "DELETE FROM presupuestos WHERE proyecto_id=? AND ejercicio=? AND periodo=?",
+                (proyecto_id, int(ejercicio), int(periodo)))
+        else:
+            conn.execute(
+                """INSERT INTO presupuestos (proyecto_id, ejercicio, periodo, importe)
+                   VALUES (?,?,?,?)
+                   ON CONFLICT(proyecto_id, ejercicio, periodo)
+                   DO UPDATE SET importe=excluded.importe""",
+                (proyecto_id, int(ejercicio), int(periodo), importe))
+
+
+def presupuesto_anual(conn, proyecto_id, ejercicio) -> float:
+    """Suma de los meses del ejercicio; si no hay, usa el presupuesto de referencia."""
+    row = conn.execute(
+        "SELECT COALESCE(SUM(importe),0) AS s FROM presupuestos WHERE proyecto_id=? AND ejercicio=?",
+        (proyecto_id, int(ejercicio))).fetchone()
+    if row and row["s"]:
+        return float(row["s"])
+    ref = conn.execute("SELECT presupuesto FROM proyectos WHERE id=?", (proyecto_id,)).fetchone()
+    return float(ref["presupuesto"]) if ref else 0.0
+
+
+def imputado_por_proyecto(conn, ejercicio=None) -> Dict[int, float]:
+    q = ("SELECT r.proyecto_id AS pid, COALESCE(SUM(r.importe),0) AS imp "
+         "FROM repartos r JOIN documentos d ON d.id = r.documento_id WHERE r.proyecto_id IS NOT NULL")
+    params: List[Any] = []
+    if ejercicio:
+        q += " AND d.ejercicio=?"; params.append(int(ejercicio))
+    q += " GROUP BY r.proyecto_id"
+    return {row["pid"]: row["imp"] for row in conn.execute(q, params).fetchall()}
+
+
+def seguimiento_presupuestario(conn, ejercicio) -> List[Dict[str, Any]]:
+    """Presupuesto vs imputado por proyecto para un ejercicio, con estado (semáforo)."""
+    imp = imputado_por_proyecto(conn, ejercicio)
+    out = []
+    for p in list_proyectos(conn):
+        pres = presupuesto_anual(conn, p["id"], ejercicio)
+        imputado = float(imp.get(p["id"], 0) or 0)
+        pct = (imputado / pres * 100) if pres else 0
+        if not pres:
+            estado = "sin_presupuesto"
+        elif pct > 100:
+            estado = "excedido"
+        elif pct >= 80:
+            estado = "aviso"
+        else:
+            estado = "ok"
+        out.append({"id": p["id"], "codigo": p["codigo"], "nombre": p["nombre"],
+                    "presupuesto": pres, "imputado": imputado,
+                    "desviacion": pres - imputado, "pct": pct, "estado": estado})
+    out.sort(key=lambda x: x["pct"], reverse=True)
+    return out
+
+
+# --- Cierres de periodo ---------------------------------------------------
+def list_cierres(conn) -> List[Dict[str, Any]]:
+    return rows_to_dicts(conn.execute(
+        "SELECT * FROM cierres ORDER BY ejercicio DESC, periodo DESC").fetchall())
+
+
+def cierres_set(conn) -> set:
+    return {(r["ejercicio"], r["periodo"]) for r in
+            conn.execute("SELECT ejercicio, periodo FROM cierres").fetchall()}
+
+
+def is_cerrado(conn, ejercicio, periodo) -> bool:
+    if not ejercicio or not periodo:
+        return False
+    return conn.execute(
+        "SELECT 1 FROM cierres WHERE ejercicio=? AND periodo=?",
+        (int(ejercicio), int(periodo))).fetchone() is not None
+
+
+def cerrar_periodo(conn, ejercicio, periodo) -> None:
+    with conn:
+        conn.execute("INSERT OR IGNORE INTO cierres (ejercicio, periodo) VALUES (?,?)",
+                     (int(ejercicio), int(periodo)))
+
+
+def abrir_periodo(conn, ejercicio, periodo) -> None:
+    with conn:
+        conn.execute("DELETE FROM cierres WHERE ejercicio=? AND periodo=?",
+                     (int(ejercicio), int(periodo)))

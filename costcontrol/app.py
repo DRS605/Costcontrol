@@ -81,6 +81,11 @@ def get_conn():
     return db.connect()
 
 
+def _doc_bloqueado(conn, doc):
+    """True si el documento cae en un periodo cerrado."""
+    return bool(doc) and db.is_cerrado(conn, doc.get("ejercicio"), doc.get("periodo"))
+
+
 def _projects_for_allocator(conn):
     out = []
     for p in db.list_proyectos(conn, solo_activos=True):
@@ -117,6 +122,14 @@ def index():
     por_centro = db.resumen_por_centro(conn)
     ejercicios_l = db.ejercicios(conn)
     serie = db.serie_mensual(conn, ejercicio=ejercicio)
+    # alertas de presupuesto para el ejercicio seleccionado (o el más reciente)
+    ej_pres = int(ejercicio) if ejercicio else (ejercicios_l[0] if ejercicios_l else None)
+    seg = db.seguimiento_presupuestario(conn, ej_pres) if ej_pres else []
+    alertas = {
+        "excedido": [s for s in seg if s["estado"] == "excedido"],
+        "aviso": [s for s in seg if s["estado"] == "aviso"],
+        "ejercicio": ej_pres,
+    }
     conn.close()
 
     # gráficos SVG
@@ -132,7 +145,7 @@ def index():
                            por_centro=por_centro, ejercicios=ejercicios_l,
                            ejercicio_sel=ejercicio, graf_centro=graf_centro,
                            graf_proyecto=graf_proyecto, graf_mensual=graf_mensual,
-                           hay_serie=bool(serie_datos))
+                           hay_serie=bool(serie_datos), alertas=alertas)
 
 
 # --- proyectos ------------------------------------------------------------
@@ -317,6 +330,16 @@ def documento_editar(did=None):
             centro_id=int(f["centro_id"]) if f.get("centro_id") else None,
             notas=f.get("notas", "").strip(),
         )
+        # control de periodo cerrado (destino y, si se edita, origen)
+        ej_new, per_new = db.periodo_desde_fecha(payload["fecha"])
+        bloqueado = db.is_cerrado(conn, ej_new, per_new)
+        if did and not bloqueado:
+            bloqueado = _doc_bloqueado(conn, db.get_documento(conn, did))
+        if bloqueado:
+            conn.close()
+            flash("El periodo está cerrado: no se puede crear o modificar documentos en él.", "error")
+            return redirect(url_for("documento_editar", did=did) if did else url_for("documentos"))
+
         if did:
             db.update_documento(conn, did, **payload)
         else:
@@ -348,6 +371,10 @@ def documento_editar(did=None):
 def documento_borrar(did):
     conn = get_conn()
     doc = db.get_documento(conn, did)
+    if _doc_bloqueado(conn, doc):
+        conn.close()
+        flash("El periodo está cerrado: no se puede eliminar este documento.", "error")
+        return redirect(url_for("documento_reparto", did=did))
     if doc and doc.get("adjunto"):
         _borrar_archivo(doc["adjunto"])
     db.delete_documento(conn, did)
@@ -399,11 +426,11 @@ def documento_reparto(did):
     proyectos_l = db.list_proyectos(conn, solo_activos=True)
     repartos = db.get_repartos(conn, did)
     reglas = db.rows_to_dicts(conn.execute("SELECT * FROM reglas ORDER BY nombre").fetchall())
+    cerrado = _doc_bloqueado(conn, doc)
     conn.close()
-    # texto previo (si ya se repartió, reconstruye una pista)
-    texto_previo = repartos[0]["base"] if False else ""
     return render_template("reparto.html", doc=doc, proyectos=proyectos_l,
-                           repartos=repartos, reglas=reglas, texto_previo=texto_previo)
+                           repartos=repartos, reglas=reglas, texto_previo="",
+                           cerrado=cerrado)
 
 
 @app.route("/documentos/<int:did>/reparto/previsualizar", methods=["POST"])
@@ -440,6 +467,10 @@ def reparto_guardar(did):
     if not doc:
         conn.close()
         abort(404)
+    if _doc_bloqueado(conn, doc):
+        conn.close()
+        flash("El periodo está cerrado: no se puede modificar el reparto.", "error")
+        return redirect(url_for("documento_reparto", did=did))
     projects = _projects_for_allocator(conn)
     texto = request.form.get("texto", "")
     res = Allocator(projects).allocate(doc["importe"], texto)
@@ -471,6 +502,10 @@ def reparto_guardar_manual(did):
     if not doc:
         conn.close()
         abort(404)
+    if _doc_bloqueado(conn, doc):
+        conn.close()
+        flash("El periodo está cerrado: no se puede modificar el reparto.", "error")
+        return redirect(url_for("documento_reparto", did=did))
     from .allocation import parse_number
     cod2id = {p["codigo"]: p["id"] for p in db.list_proyectos(conn)}
     total = float(doc["importe"] or 0)
@@ -505,6 +540,10 @@ def reparto_guardar_manual(did):
 @app.route("/documentos/<int:did>/reparto/limpiar", methods=["POST"])
 def reparto_limpiar(did):
     conn = get_conn()
+    if _doc_bloqueado(conn, db.get_documento(conn, did)):
+        conn.close()
+        flash("El periodo está cerrado: no se puede modificar el reparto.", "error")
+        return redirect(url_for("documento_reparto", did=did))
     db.replace_repartos(conn, did, [])
     conn.close()
     flash("Reparto eliminado; el documento vuelve a estado pendiente.", "ok")
@@ -609,8 +648,12 @@ def reparto_masivo_aplicar():
     allocator = Allocator(projects)
     cod2id = {p["codigo"]: p["id"] for p in db.list_proyectos(conn)}
     docs = db.list_documentos(conn, ids=ids)
-    aplicados, fallidos = 0, 0
+    cerrados = db.cierres_set(conn)
+    aplicados, fallidos, bloqueados = 0, 0, 0
     for d in docs:
+        if (d.get("ejercicio"), d.get("periodo")) in cerrados:
+            bloqueados += 1
+            continue
         res = allocator.allocate(d["importe"], texto)
         if res.ok and res.lines:
             lines = [{
@@ -628,6 +671,8 @@ def reparto_masivo_aplicar():
     msg = f"Reparto masivo aplicado a {aplicados} documento(s)."
     if fallidos:
         msg += f" {fallidos} no se pudieron interpretar."
+    if bloqueados:
+        msg += f" {bloqueados} en periodo cerrado (omitidos)."
     flash(msg, "ok" if aplicados else "error")
     return redirect(url_for("documentos", estado="repartido"))
 
@@ -647,7 +692,8 @@ def importar():
             if destino == "documentos":
                 r = importer.import_documentos(
                     conn, data, tipo_defecto=request.form.get("tipo_defecto", "factura"),
-                    omitir_duplicados=bool(request.form.get("omitir_duplicados")))
+                    omitir_duplicados=bool(request.form.get("omitir_duplicados")),
+                    cerrados=db.cierres_set(conn))
                 msg = f"{r['importados']} documento(s) importado(s)."
                 extras = []
                 if r["cuentas_creadas"]:
@@ -662,6 +708,8 @@ def importar():
                     msg += f" {r['repartidos_auto']} repartido(s) automáticamente por regla de centro."
                 if r.get("duplicados"):
                     msg += f" {r['duplicados']} duplicado(s) omitido(s)."
+                if r.get("cerrados_omitidos"):
+                    msg += f" {r['cerrados_omitidos']} en periodo cerrado (omitidos)."
                 if r["errores"]:
                     msg += " Incidencias: " + " | ".join(r["errores"][:5])
             else:
@@ -756,6 +804,62 @@ def informe_exportar():
     return send_file(io.BytesIO(data), as_attachment=True,
                      download_name="informe_costcontrol.xlsx",
                      mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+
+
+# --- PRESUPUESTOS Y CIERRE DE PERIODO ------------------------------------
+@app.route("/presupuestos")
+def presupuestos():
+    conn = get_conn()
+    ejs = db.ejercicios(conn)
+    ejercicio = request.args.get("ejercicio")
+    if not ejercicio:
+        ejercicio = ejs[0] if ejs else 2026
+    ejercicio = int(ejercicio)
+    proyectos_l = db.list_proyectos(conn)
+    pres = db.get_presupuestos(conn, ejercicio)
+    seguimiento = db.seguimiento_presupuestario(conn, ejercicio)
+    cierres = db.list_cierres(conn)
+    cerrados = db.cierres_set(conn)
+    conn.close()
+    # imputado por mes para el semáforo mensual no es necesario aquí
+    return render_template("presupuestos.html", proyectos=proyectos_l, pres=pres,
+                           ejercicio=ejercicio, ejercicios=ejs or [ejercicio],
+                           seguimiento=seguimiento, meses=MESES, cierres=cierres,
+                           cerrados=cerrados,
+                           anios=sorted({ejercicio, 2025, 2026, 2027}))
+
+
+@app.route("/presupuestos/guardar", methods=["POST"])
+def presupuestos_guardar():
+    from .allocation import parse_number
+    conn = get_conn()
+    ejercicio = int(request.form.get("ejercicio") or 2026)
+    for p in db.list_proyectos(conn):
+        for mes in range(1, 13):
+            campo = f"pres_{p['id']}_{mes}"
+            if campo in request.form:
+                val = parse_number(request.form.get(campo)) or 0
+                db.set_presupuesto(conn, p["id"], ejercicio, mes, float(val))
+    conn.close()
+    flash("Presupuestos guardados.", "ok")
+    return redirect(url_for("presupuestos", ejercicio=ejercicio))
+
+
+@app.route("/cierres/cambiar", methods=["POST"])
+def cierres_cambiar():
+    conn = get_conn()
+    ejercicio = int(request.form.get("ejercicio") or 2026)
+    periodo = int(request.form.get("periodo") or 0)
+    accion = request.form.get("accion")
+    if periodo:
+        if accion == "cerrar":
+            db.cerrar_periodo(conn, ejercicio, periodo)
+            flash(f"Periodo {MESES[periodo]} {ejercicio} cerrado.", "ok")
+        else:
+            db.abrir_periodo(conn, ejercicio, periodo)
+            flash(f"Periodo {MESES[periodo]} {ejercicio} reabierto.", "ok")
+    conn.close()
+    return redirect(url_for("presupuestos", ejercicio=ejercicio))
 
 
 def create_app():
