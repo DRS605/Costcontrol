@@ -29,10 +29,12 @@ herramienta traduce ese texto libre a líneas analíticas concretas.
   | `según superficie` | ponderado por un *driver* guardado en cada proyecto |
   | `PROY-A 30%, PROY-B 500 €, resto PROY-C` | mezcla de %, importe y resto |
   | `como la regla Obra estándar` | reutiliza una **regla guardada** por su nombre |
+  | `según la regla Obra, pero solo PROY-A y PROY-B` | **reescala** la regla a un subconjunto |
 
   Las reglas se guardan una vez (sección *Reglas*) y se invocan por nombre con
   `como la regla NOMBRE` / `según la regla NOMBRE` en cualquier documento; se
-  pueden anidar (una regla que referencia a otra) y el motor detecta ciclos.
+  pueden **reescalar a un subconjunto** (`… solo A y B`, o `… excepto C`),
+  **anidar** (una regla que referencia a otra) y el motor detecta ciclos.
 
   Cada reparto muestra una **traducción legible** de lo interpretado y avisa si
   algo no cuadra (queda importe sin repartir, se pasa del total, etc.).

@@ -125,6 +125,18 @@ def run():
     assert abs(d["repartido"] - dref["importe"]) < 0.01
     print("  ok  referenciar regla guardada (como la regla X)"); ok += 1
 
+    # reescalado a subconjunto ("según la regla X, pero solo A y B")
+    conn = db.connect()
+    db.upsert_regla(conn, "Tres", "50% PROY-A, 30% PROY-B, 20% PROY-C")
+    conn.close()
+    r = client.post(f"/documentos/{dref['id']}/reparto/previsualizar",
+                    json={"texto": "según la regla Tres, pero solo PROY-A y PROY-B"})
+    d = r.get_json()
+    assert d["ok"] and len(d["lineas"]) == 2, d
+    porc = {l["proyecto"]: l["porcentaje"] for l in d["lineas"]}
+    assert abs(porc["PROY-A"] - 62.5) < 0.1 and abs(porc["PROY-B"] - 37.5) < 0.1, porc
+    print("  ok  reescalado de regla a subconjunto"); ok += 1
+
     # reparto masivo sobre documentos pendientes
     conn = db.connect()
     pend = db.list_documentos(conn, estado="pendiente")

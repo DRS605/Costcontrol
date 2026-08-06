@@ -161,12 +161,34 @@ class Allocator:
                     self._rules[norm(nombre)] = (nombre, texto)
 
     def _match_rule(self, tail: str):
-        """Encuentra la regla cuyo nombre encabeza el texto tras 'regla'."""
+        """Encuentra la regla cuyo nombre encabeza el texto tras 'regla'.
+
+        Devuelve (nombre, texto, resto), donde `resto` es lo que sigue al nombre
+        (p.ej. "pero solo PROY-A y PROY-B"), o None si no hay coincidencia.
+        """
         tail = norm(tail)
-        for name_norm, data in sorted(self._rules.items(), key=lambda kv: -len(kv[0])):
-            if re.match(re.escape(name_norm) + r"(\b|$)", tail):
-                return data
+        for name_norm, (nombre, texto) in sorted(self._rules.items(), key=lambda kv: -len(kv[0])):
+            mm = re.match(re.escape(name_norm) + r"(\b|$)", tail)
+            if mm:
+                return (nombre, texto, tail[mm.end():].strip())
         return None
+
+    _SUBSET_EXCL = re.compile(r"\b(excepto|salvo|menos|quitando)\b")
+    _SUBSET_KEEP = re.compile(r"\b(solo|solamente|unicamente)\b")
+
+    def _subset_filter(self, resto: str):
+        """Detecta un subconjunto en `resto`: ('solo'|'excepto', [proyectos]) o None."""
+        if not resto:
+            return None
+        r = norm(resto)
+        keep = bool(self._SUBSET_KEEP.search(r))
+        excl = bool(self._SUBSET_EXCL.search(r))
+        if not (keep or excl):
+            return None
+        projs = self._find_projects_in(resto)
+        if not projs:
+            return None
+        return ("excepto" if excl and not keep else "solo", projs)
 
     # -- búsqueda de proyectos en el texto --------------------------------
     def _find_projects_in(self, segment: str) -> List[Project]:
@@ -257,8 +279,13 @@ class Allocator:
         return self._by_segments(total, raw, res, driver)
 
     def _apply_rule(self, total, matched, res, _seen) -> AllocationResult:
-        """Evalúa la regla guardada `matched` sobre el importe actual."""
-        nombre, texto = matched
+        """Evalúa la regla guardada `matched` sobre el importe actual.
+
+        Si tras el nombre hay un subconjunto ("pero solo A y B" / "excepto C"),
+        filtra las líneas de la regla a ese subconjunto y **reescala** sus
+        proporciones para que vuelvan a sumar el total.
+        """
+        nombre, texto, resto = matched
         _seen = set(_seen or ())
         key = norm(nombre)
         if key in _seen:
@@ -269,6 +296,39 @@ class Allocator:
             res.warnings.append(
                 f'La regla «{nombre}» no se pudo aplicar: ' + " ".join(sub.warnings))
             return res
+
+        subset = self._subset_filter(resto)
+        if subset:
+            modo, projs = subset
+            codes = {p.codigo for p in projs}
+            if modo == "excepto":
+                kept = [l for l in sub.lines if l.proyecto not in codes]
+                desc = "excepto " + ", ".join(sorted(codes))
+            else:
+                kept = [l for l in sub.lines if l.proyecto in codes]
+                desc = "solo " + ", ".join(sorted(codes))
+            base = sum((l.importe for l in kept), Decimal("0"))
+            if not kept or base <= 0:
+                res.warnings.append(
+                    f'El subconjunto ({desc}) no deja importe de la regla «{nombre}» para reescalar.')
+                return res
+            lines = []
+            for l in kept:
+                imp = money(total * l.importe / base)
+                pct = money(imp / total * 100) if total else Decimal("0")
+                lines.append(AllocationLine(l.proyecto, l.nombre, imp, pct,
+                                            f'reescalado de regla «{nombre}»'))
+            dif = money(total - sum((x.importe for x in lines), Decimal("0")))
+            if lines and dif != 0:
+                biggest = max(lines, key=lambda x: x.importe)
+                biggest.importe = money(biggest.importe + dif)
+                biggest.porcentaje = money(biggest.importe / total * 100) if total else Decimal("0")
+            res.lines = lines
+            res.ok = True
+            res.criterio = f'regla «{nombre}» ({desc})'
+            res.explanation.insert(0, f'Regla «{nombre}» reescalada a {desc}.')
+            return res
+
         sub.criterio = f'regla «{nombre}»'
         sub.explanation.insert(0, f'Aplicada la regla guardada «{nombre}» ("{texto}").')
         return sub

@@ -127,6 +127,25 @@ def test_regla_anidada():
     assert imp(r, "PROY1") == Decimal("500.00")
 
 
+def test_regla_subconjunto_solo():
+    rules = {"Tres": "50% PROY1, 30% PROY2, 20% PROY3"}
+    r = allocate("1000", "según la regla Tres, pero solo PROY1 y PROY2", _projs(), rules=rules)
+    assert r.ok
+    # 50:30 reescalado a 100 -> 62.5 / 37.5
+    assert imp(r, "PROY1") == Decimal("625.00")
+    assert imp(r, "PROY2") == Decimal("375.00")
+    assert imp(r, "PROY3") == Decimal("0")
+    assert r.repartido == Decimal("1000.00")
+
+
+def test_regla_subconjunto_excepto():
+    rules = {"Tres": "50% PROY1, 30% PROY2, 20% PROY3"}
+    r = allocate("1000", "como la regla Tres excepto PROY3", _projs(), rules=rules)
+    assert r.ok
+    assert imp(r, "PROY1") == Decimal("625.00")
+    assert imp(r, "PROY2") == Decimal("375.00")
+
+
 def test_regla_circular_no_cuelga():
     rules = {"A": "como la regla B", "B": "como la regla A"}
     r = allocate("1000", "como la regla A", _projs(), rules=rules)
