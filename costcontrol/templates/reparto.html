@@ -49,8 +49,9 @@
 
     {% if reglas %}
     <h3 style="margin-top:22px">Plantillas de reparto guardadas</h3>
+    <p class="small muted" style="margin:0 0 6px">Púlsalas para reutilizarlas por nombre (<code>como la regla …</code>).</p>
     <div class="pill-examples">
-      {% for r in reglas %}<span class="pill" data-fill="{{ r.texto }}" title="{{ r.texto }}">{{ r.nombre }}</span>{% endfor %}
+      {% for r in reglas %}<span class="pill" data-fill="como la regla {{ r.nombre }}" title="{{ r.texto }}">{{ r.nombre }}</span>{% endfor %}
     </div>
     {% endif %}
   </div>
@@ -83,6 +84,7 @@
           <li><code>1.500 € a A y el resto a B</code> — importes fijos + resto</li>
           <li><code>por m2: A 100, B 300</code> — pesos explícitos</li>
           <li><code>según superficie</code> — usa el driver guardado en cada proyecto</li>
+          <li><code>como la regla NOMBRE</code> — reutiliza una regla guardada</li>
         </ul>
       </div>
     </div>

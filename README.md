@@ -28,6 +28,11 @@ herramienta traduce ese texto libre a líneas analíticas concretas.
   | `por m2: PROY-A 100, PROY-B 300` | ponderado por pesos |
   | `según superficie` | ponderado por un *driver* guardado en cada proyecto |
   | `PROY-A 30%, PROY-B 500 €, resto PROY-C` | mezcla de %, importe y resto |
+  | `como la regla Obra estándar` | reutiliza una **regla guardada** por su nombre |
+
+  Las reglas se guardan una vez (sección *Reglas*) y se invocan por nombre con
+  `como la regla NOMBRE` / `según la regla NOMBRE` en cualquier documento; se
+  pueden anidar (una regla que referencia a otra) y el motor detecta ciclos.
 
   Cada reparto muestra una **traducción legible** de lo interpretado y avisa si
   algo no cuadra (queda importe sin repartir, se pasa del total, etc.).

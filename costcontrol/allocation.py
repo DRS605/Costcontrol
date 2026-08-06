@@ -15,6 +15,7 @@ Ejemplos de frases que entiende:
     "por m2: PROY1 100, PROY2 300"       (reparto ponderado por pesos)
     "según superficie"                    (ponderado por un driver guardado)
     "PROY1 30%, PROY2 500 €, resto PROY3"
+    "como la regla Obra estándar"        (reutiliza una regla guardada por nombre)
 
 El motor es tolerante: acepta acentos, mayúsculas, formato de número
 español (1.234,56) o inglés (1234.56) y separadores variados (comas, "y",
@@ -130,6 +131,9 @@ _ALL_KW = ["todo", "integro", "integramente", "100%", "el total", "la totalidad"
 _WEIGHT_PREPS = ["por ", "segun ", "en funcion de ", "en proporcion a ", "prorrateo por ", "prorratear por "]
 
 _SPLIT_RE = re.compile(r"[,;\n/]| y | e | mas | \+ ", re.IGNORECASE)
+# referencia a una regla guardada: "como la regla X", "según la regla X"...
+_RULEREF_RE = re.compile(
+    r"\b(?:como|segun|aplica|aplicar|usa|usar|con)\s+(?:la\s+|el\s+)?regla\s+(.+)")
 # Números "de verdad": no cuentan los dígitos pegados a letras (p.ej. el 1 de
 # PROY1 o el 2 de m2). El número debe empezar tras un espacio, inicio, € o (.
 _NUM_RE = re.compile(r"(?<![A-Za-z0-9])\d[\d\.\,]*")
@@ -143,11 +147,26 @@ def _numbers(text: str) -> List[str]:
 
 
 class Allocator:
-    def __init__(self, projects: Sequence[Project]):
+    def __init__(self, projects: Sequence[Project], rules=None):
         self.projects = list(projects)
         # índices normalizados: código y nombre -> proyecto
         self._by_cod = {norm(p.codigo): p for p in self.projects}
         self._by_name = {norm(p.nombre): p for p in self.projects if p.nombre}
+        # reglas guardadas: {nombre_normalizado: (nombre, texto)}
+        self._rules: Dict[str, tuple] = {}
+        if rules:
+            items = rules.items() if isinstance(rules, dict) else [(r["nombre"], r["texto"]) for r in rules]
+            for nombre, texto in items:
+                if nombre and texto:
+                    self._rules[norm(nombre)] = (nombre, texto)
+
+    def _match_rule(self, tail: str):
+        """Encuentra la regla cuyo nombre encabeza el texto tras 'regla'."""
+        tail = norm(tail)
+        for name_norm, data in sorted(self._rules.items(), key=lambda kv: -len(kv[0])):
+            if re.match(re.escape(name_norm) + r"(\b|$)", tail):
+                return data
+        return None
 
     # -- búsqueda de proyectos en el texto --------------------------------
     def _find_projects_in(self, segment: str) -> List[Project]:
@@ -183,7 +202,7 @@ class Allocator:
         return None
 
     # -- API principal -----------------------------------------------------
-    def allocate(self, total, text: str) -> AllocationResult:
+    def allocate(self, total, text: str, _seen=None) -> AllocationResult:
         total = money(total)
         res = AllocationResult(ok=False, total=total)
         raw = (text or "").strip()
@@ -191,6 +210,18 @@ class Allocator:
             res.warnings.append("No se ha escrito ninguna regla de reparto.")
             return res
         n = norm(raw)
+
+        # ---- MODO: reutilizar una regla guardada ("como la regla X") -----
+        if self._rules:
+            m = _RULEREF_RE.search(n)
+            if m:
+                matched = self._match_rule(m.group(1).strip())
+                if matched:
+                    return self._apply_rule(total, matched, res, _seen)
+                res.warnings.append(
+                    "No se ha encontrado esa regla. Reglas guardadas: "
+                    + ", ".join(sorted(v[0] for v in self._rules.values())))
+                return res
 
         equal_mode = any(k in n for k in _EQUAL_KW)
         driver = self._detect_driver(raw)
@@ -224,6 +255,23 @@ class Allocator:
 
         # ---- MODO general: por segmentos --------------------------------
         return self._by_segments(total, raw, res, driver)
+
+    def _apply_rule(self, total, matched, res, _seen) -> AllocationResult:
+        """Evalúa la regla guardada `matched` sobre el importe actual."""
+        nombre, texto = matched
+        _seen = set(_seen or ())
+        key = norm(nombre)
+        if key in _seen:
+            res.warnings.append(f'Referencia circular a la regla «{nombre}».')
+            return res
+        sub = self.allocate(total, texto, _seen | {key})
+        if not sub.ok:
+            res.warnings.append(
+                f'La regla «{nombre}» no se pudo aplicar: ' + " ".join(sub.warnings))
+            return res
+        sub.criterio = f'regla «{nombre}»'
+        sub.explanation.insert(0, f'Aplicada la regla guardada «{nombre}» ("{texto}").')
+        return sub
 
     # -- estrategias -------------------------------------------------------
     def _equal(self, total, projs, res) -> AllocationResult:
@@ -413,6 +461,6 @@ class Allocator:
         return res
 
 
-def allocate(total, text: str, projects: Sequence[Project]) -> AllocationResult:
+def allocate(total, text: str, projects: Sequence[Project], rules=None) -> AllocationResult:
     """Atajo funcional."""
-    return Allocator(projects).allocate(total, text)
+    return Allocator(projects, rules=rules).allocate(total, text)

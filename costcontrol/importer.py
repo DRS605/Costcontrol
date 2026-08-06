@@ -115,7 +115,8 @@ def import_documentos(conn, file_bytes: bytes, tipo_defecto: str = "factura",
     projs = [Project(codigo=p["codigo"], nombre=p["nombre"],
                      drivers={k: v for k, v in (p.get("drivers") or {}).items()})
              for p in db.list_proyectos(conn, solo_activos=True)]
-    allocator = Allocator(projs)
+    reglas_map = {r["nombre"]: r["texto"] for r in db.list_reglas(conn)}
+    allocator = Allocator(projs, rules=reglas_map)
     cod2id = {p["codigo"]: p["id"] for p in db.list_proyectos(conn)}
 
     for i, row in enumerate(rows[1:], start=2):

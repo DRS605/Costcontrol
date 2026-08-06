@@ -102,6 +102,37 @@ def test_under_allocation_warns():
     assert any("sin repartir" in w for w in r.warnings)
 
 
+def test_regla_referencia():
+    rules = {"Obra estándar": "60% PROY1, 40% PROY2"}
+    r = allocate("1000", "como la regla Obra estándar", _projs(), rules=rules)
+    assert r.ok
+    assert imp(r, "PROY1") == Decimal("600.00")
+    assert imp(r, "PROY2") == Decimal("400.00")
+    # también con "según la regla"
+    r2 = allocate("1000", "según la regla Obra estándar", _projs(), rules=rules)
+    assert r2.ok and imp(r2, "PROY1") == Decimal("600.00")
+
+
+def test_regla_inexistente_avisa():
+    r = allocate("1000", "como la regla NoExiste", _projs(), rules={"Otra": "todo a PROY1"})
+    assert not r.ok
+    assert any("no se ha encontrado" in w.lower() for w in r.warnings)
+
+
+def test_regla_anidada():
+    rules = {"Base": "a partes iguales entre PROY1, PROY2",
+             "Compuesta": "como la regla Base"}
+    r = allocate("1000", "como la regla Compuesta", _projs(), rules=rules)
+    assert r.ok
+    assert imp(r, "PROY1") == Decimal("500.00")
+
+
+def test_regla_circular_no_cuelga():
+    rules = {"A": "como la regla B", "B": "como la regla A"}
+    r = allocate("1000", "como la regla A", _projs(), rules=rules)
+    assert not r.ok  # detecta el ciclo y no se cuelga
+
+
 def test_empty():
     r = allocate("1000", "", _projs())
     assert not r.ok

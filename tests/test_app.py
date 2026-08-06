@@ -113,6 +113,18 @@ def run():
     assert any(x["nombre"] == "Regla Test" for x in regs)
     print("  ok  alta de regla"); ok += 1
 
+    # referenciar una regla guardada desde el reparto ("como la regla X")
+    conn = db.connect()
+    db.upsert_regla(conn, "Mitades", "a partes iguales entre PROY-A, PROY-B")
+    dref = db.list_documentos(conn)[0]
+    conn.close()
+    r = client.post(f"/documentos/{dref['id']}/reparto/previsualizar",
+                    json={"texto": "como la regla Mitades"})
+    d = r.get_json()
+    assert d["ok"] and len(d["lineas"]) == 2, d
+    assert abs(d["repartido"] - dref["importe"]) < 0.01
+    print("  ok  referenciar regla guardada (como la regla X)"); ok += 1
+
     # reparto masivo sobre documentos pendientes
     conn = db.connect()
     pend = db.list_documentos(conn, estado="pendiente")

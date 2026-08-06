@@ -94,6 +94,12 @@ def _projects_for_allocator(conn):
     return out
 
 
+def _allocator(conn):
+    """Crea un Allocator con los proyectos activos y las reglas guardadas."""
+    rules = {r["nombre"]: r["texto"] for r in db.list_reglas(conn)}
+    return Allocator(_projects_for_allocator(conn), rules=rules)
+
+
 @app.template_filter("eur")
 def eur(value):
     try:
@@ -461,10 +467,10 @@ def reparto_previsualizar(did):
     if not doc:
         conn.close()
         abort(404)
-    projects = _projects_for_allocator(conn)
+    alloc = _allocator(conn)
     conn.close()
     texto = request.json.get("texto", "") if request.is_json else request.form.get("texto", "")
-    res = Allocator(projects).allocate(doc["importe"], texto)
+    res = alloc.allocate(doc["importe"], texto)
     return {
         "ok": res.ok,
         "criterio": res.criterio,
@@ -491,9 +497,9 @@ def reparto_guardar(did):
         conn.close()
         flash("El periodo está cerrado: no se puede modificar el reparto.", "error")
         return redirect(url_for("documento_reparto", did=did))
-    projects = _projects_for_allocator(conn)
+    alloc = _allocator(conn)
     texto = request.form.get("texto", "")
-    res = Allocator(projects).allocate(doc["importe"], texto)
+    res = alloc.allocate(doc["importe"], texto)
     if not res.ok:
         conn.close()
         flash("No se pudo interpretar el reparto: " + " ".join(res.warnings), "error")
@@ -664,8 +670,7 @@ def reparto_masivo_aplicar():
         conn.close()
         flash("Selecciona documentos y escribe una regla de reparto.", "error")
         return redirect(request.referrer or url_for("reparto_masivo"))
-    projects = _projects_for_allocator(conn)
-    allocator = Allocator(projects)
+    allocator = _allocator(conn)
     cod2id = {p["codigo"]: p["id"] for p in db.list_proyectos(conn)}
     docs = db.list_documentos(conn, ids=ids)
     cerrados = db.cierres_set(conn)
