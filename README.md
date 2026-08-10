@@ -70,7 +70,12 @@ herramienta traduce ese texto libre a líneas analíticas concretas.
 
 ## Instalación y arranque
 
-Requiere Python 3.9+.
+**Forma fácil (doble clic, en tu portátil):** descarga el proyecto y abre el
+lanzador de tu sistema — `iniciar-windows.bat`, `iniciar-mac.command` o
+`iniciar-linux.sh`. Prepara todo y abre el navegador solo. Guía detallada en
+[`RUN_LOCAL.md`](RUN_LOCAL.md).
+
+**Forma manual** (requiere Python 3.9+):
 
 ```bash
 pip install -r requirements.txt
@@ -80,7 +85,10 @@ python run.py --demo      # carga datos de ejemplo y arranca
 python run.py             # arranca en limpio
 ```
 
-Abre <http://localhost:5000>. Opciones: `--port=8080`, `--debug`.
+Abre <http://localhost:5000>. Opciones: `--host=127.0.0.1` (solo este equipo),
+`--open` (abre el navegador), `--port=8080`, `--debug`.
+
+Para publicarla online con enlace fijo, ver [`DEPLOY.md`](DEPLOY.md).
 
 ## Flujo de trabajo típico
 
