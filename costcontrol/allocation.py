@@ -126,10 +126,46 @@ class AllocationResult:
 
 # --- palabras clave -------------------------------------------------------
 
-_EQUAL_KW = ["partes iguales", "a partes iguales", "por igual", "equitativ", "equiparte"]
-_REST_KW = ["resto", "el resto", "restante", "lo que quede", "lo demas"]
+_EQUAL_KW = ["partes iguales", "a partes iguales", "por igual", "equitativ",
+             "equiparte", "mitad y mitad", "a medias", "mismo importe",
+             "misma cantidad", "mismas cantidades", "a escote", "lo mismo cada",
+             "misma parte", "misma proporcion"]
+_REST_KW = ["resto", "el resto", "restante", "lo que quede", "lo demas",
+            "lo que sobra", "lo que sobre", "sobrante", "lo que falta",
+            "remanente", "lo restante"]
+# proyectos "restantes" a los que va el resto ("… y el resto a los demás")
+_OTHERS_KW = ["los demas", "las demas", "resto de proyectos", "resto de los proyectos",
+              "los otros", "los restantes", "otros proyectos", "demas proyectos",
+              "a los demas", "entre los demas"]
 _ALL_KW = ["todo", "integro", "integramente", "100%", "el total", "la totalidad"]
-_WEIGHT_PREPS = ["por ", "segun ", "en funcion de ", "en proporcion a ", "prorrateo por ", "prorratear por "]
+_WEIGHT_PREPS = ["por ", "segun ", "en funcion de ", "en proporcion a ",
+                 "prorrateo por ", "prorratear por ", "proporcional a ",
+                 "proporcionalmente a ", "a prorrata de ", "en base a ",
+                 "en base al ", "conforme a ", "de acuerdo con ", "de acuerdo a ",
+                 "ponderado por ", "en relacion a ", "atendiendo a "]
+
+# fracciones escritas en palabras -> porcentaje (buscar frases largas primero)
+_FRAC_MAP = [
+    ("tres cuartas partes", Decimal("75")), ("tres cuartos", Decimal("75")),
+    ("dos terceras partes", Decimal("200") / Decimal("3")),
+    ("dos tercios", Decimal("200") / Decimal("3")),
+    ("cuatro quintos", Decimal("80")), ("tres quintos", Decimal("60")),
+    ("dos quintos", Decimal("40")),
+    ("una cuarta parte", Decimal("25")), ("un cuarto", Decimal("25")),
+    ("una tercera parte", Decimal("100") / Decimal("3")),
+    ("un tercio", Decimal("100") / Decimal("3")),
+    ("un quinto", Decimal("20")),
+    ("tres cuartas", Decimal("75")),
+    ("la mitad", Decimal("50")), ("mitad de", Decimal("50")),
+]
+
+
+def _fraction_pct(segment_norm: str) -> Optional[Decimal]:
+    """Devuelve el porcentaje de una fracción escrita ('un tercio' -> 33.33…)."""
+    for phrase, pct in _FRAC_MAP:
+        if phrase in segment_norm:
+            return pct
+    return None
 
 _SPLIT_RE = re.compile(r"[,;\n/]| y | e | mas | \+ ", re.IGNORECASE)
 # referencia a una regla guardada: "como la regla X", "según la regla X"...
@@ -246,18 +282,48 @@ class Allocator:
             return None
         return ([left[0], right[0]], [mult, Decimal("1")])
 
+    def _cada_uno(self, raw: str):
+        """'20% a cada uno' / '300 € a cada proyecto' -> (texto_canónico, nota).
+
+        Reparte la misma cifra a cada proyecto indicado (o a todos si no se
+        nombra ninguno). Devuelve None si no aplica con claridad.
+        """
+        n = norm(raw)
+        nums = _numbers(raw)
+        if len({x for x in nums}) != 1:   # necesitamos una única cifra
+            return None
+        has_pct = "%" in raw or "por ciento" in n
+        has_eur = bool(re.search(r"€|eur", raw, re.IGNORECASE))
+        if not (has_pct or has_eur):
+            return None
+        projs = self._find_projects_in(raw) or self.projects
+        if not projs:
+            return None
+        unit = "%" if has_pct else "€"
+        v = nums[0]
+        canon = ", ".join(f"{v} {unit} {p.codigo}" for p in projs)
+        nota = (f'"cada uno": {v}{unit} a cada uno de {len(projs)} proyecto(s).')
+        return (canon, nota)
+
+    # artículos que se saltan tras la preposición ("proporcional a las horas")
+    _DRIVER_SKIP = {"la", "el", "los", "las", "un", "una", "unos", "unas",
+                    "de", "del", "numero", "nº", "cantidad", "valor", "su", "sus"}
+    # palabras que indican que NO es un driver (es otro modo de reparto)
+    _DRIVER_ABORT = {"igual", "iguales", "partes", "cierto", "ahora", "cada",
+                     "todo", "todos", "cada"}
+
     def _detect_driver(self, text: str) -> Optional[str]:
         n = norm(text)
         for prep in _WEIGHT_PREPS:
             idx = n.find(prep)
-            if idx >= 0:
-                tail = n[idx + len(prep):]
-                # el driver es la primera palabra "sustantiva" tras la preposición
-                m = re.match(r"([a-z0-9º²]+)", tail)
-                if m:
-                    word = m.group(1)
-                    if word not in ("igual", "iguales", "partes", "cierto", "ahora"):
-                        return word
+            if idx < 0:
+                continue
+            words = re.findall(r"[a-z0-9º²]+", n[idx + len(prep):])
+            i = 0
+            while i < len(words) and words[i] in self._DRIVER_SKIP:
+                i += 1
+            if i < len(words) and words[i] not in self._DRIVER_ABORT:
+                return words[i]
         return None
 
     # -- API principal -----------------------------------------------------
@@ -298,7 +364,16 @@ class Allocator:
                        f"{weights[0]}× respecto a {projs[1].codigo}.")
                 return out
 
-        equal_mode = any(k in n for k in _EQUAL_KW)
+        # ---- MODO: "cada uno" con cifra ("20% a cada uno", "300€ cada uno")
+        if re.search(r"\bcada\b", n) and _numbers(raw):
+            canon = self._cada_uno(raw)
+            if canon:
+                out = self._by_segments(total, canon[0], res, None)
+                out.explanation.insert(0, canon[1])
+                return out
+
+        cada_igual = bool(re.search(r"cada (uno|proyecto|centro)", n))
+        equal_mode = any(k in n for k in _EQUAL_KW) or cada_igual
         driver = self._detect_driver(raw)
 
         # ---- MODO: a partes iguales -------------------------------------
@@ -527,13 +602,19 @@ class Allocator:
         amt_items: List[tuple] = []      # (proyecto, Decimal importe)
         weight_items: List[tuple] = []   # (proyecto, Decimal peso)
         rest_projs: List[Project] = []
+        rest_others = False              # "… y el resto a los demás"
         all_project = None
         unknown_segments: List[str] = []
+        has_fraction = False             # se usó una fracción escrita
 
         text_has_pct = "%" in raw or "por ciento" in norm(raw)
 
         for seg in segments:
             sn = norm(seg)
+            # "los demás / el resto de proyectos": el resto va a los no asignados
+            if any(k in sn for k in _OTHERS_KW):
+                rest_others = True
+                continue
             projs = self._find_projects_in(seg)
             is_rest = any(k in sn for k in _REST_KW)
             is_all = any(k in sn for k in _ALL_KW) and "100%" not in sn.replace(" ", "")
@@ -541,6 +622,13 @@ class Allocator:
             value = parse_number(nums[0]) if nums else None
             has_pct = "%" in seg or "por ciento" in sn
             has_eur = bool(re.search(r"€|eur", seg, re.IGNORECASE))
+            # fracción escrita ("un tercio", "la mitad") -> porcentaje
+            if value is None and not is_rest and not is_all:
+                frac = _fraction_pct(sn)
+                if frac is not None:
+                    value = frac
+                    has_pct = True
+                    has_fraction = True
 
             if not projs:
                 # segmento sin proyecto: puede ser ruido ("y el", "reparte")
@@ -577,7 +665,7 @@ class Allocator:
                     pct_items.append((tp, value))  # se re-decide abajo
 
         # Si asumimos porcentajes pero no hay "%" en el texto, comprobamos suma
-        if pct_items and not text_has_pct and not amt_items and not weight_items:
+        if pct_items and not text_has_pct and not has_fraction and not amt_items and not weight_items:
             suma = sum((v for _, v in pct_items), Decimal("0"))
             if not (Decimal("95") <= suma <= Decimal("105")):
                 # No parecen porcentajes -> los tratamos como importes fijos
@@ -600,7 +688,7 @@ class Allocator:
             weights = [w for _, w in weight_items]
             return self._weighted(total, projs, weights, res, driver or "pesos")
 
-        if not pct_items and not amt_items and not rest_projs:
+        if not pct_items and not amt_items and not rest_projs and not rest_others:
             res.warnings.append(
                 "No se ha entendido el reparto. Indica proyectos con % , importes € "
                 "o usa 'a partes iguales'."
@@ -627,6 +715,13 @@ class Allocator:
             tmp_lines.append(AllocationLine(p.codigo, p.nombre, imp, money(pct), f"{money(pct)} %"))
 
         restante = money(total - asignado)
+
+        # "los demás": el resto se reparte entre los proyectos aún no asignados
+        if rest_others:
+            asignados_cod = {l.proyecto for l in tmp_lines} | {p.codigo for p in rest_projs}
+            for p in self.projects:
+                if p.codigo not in asignados_cod:
+                    rest_projs.append(p)
 
         if rest_projs:
             # dedup preservando orden

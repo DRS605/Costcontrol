@@ -25,9 +25,13 @@ herramienta traduce ese texto libre a líneas analíticas concretas.
   | `a partes iguales entre PROY-A, PROY-B, PROY-C` | a partes iguales |
   | `todo a PROY-A` | 100 % a un proyecto |
   | `1.500 € a PROY-A y el resto a PROY-B` | importe fijo + resto |
+  | `la mitad a PROY-A, un tercio a PROY-B` | fracciones escritas en palabras |
+  | `60% a PROY-A, el resto a los demás` | el resto entre los proyectos no asignados |
+  | `20% a cada uno` · `300 € a cada proyecto` | misma cifra a cada proyecto |
+  | `mitad y mitad entre PROY-A y PROY-B` | a partes iguales (coloquial) |
   | `por m2: PROY-A 100, PROY-B 300` | ponderado por pesos |
   | `el doble a PROY-A que a PROY-B` | pesos relativos (2 : 1) |
-  | `según superficie` | ponderado por un *driver* guardado en cada proyecto |
+  | `según superficie` · `proporcional a horas` | ponderado por un *driver* guardado |
   | `PROY-A 30%, PROY-B 500 €, resto PROY-C` | mezcla de %, importe y resto |
   | `como la regla Obra estándar` | reutiliza una **regla guardada** por su nombre |
   | `según la regla Obra, pero solo PROY-A y PROY-B` | **reescala** la regla a un subconjunto |

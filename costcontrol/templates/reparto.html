@@ -46,6 +46,8 @@
         <span class="pill" data-fill="1.000 € a {{ proyectos[0].codigo if proyectos }} y el resto a {{ proyectos[1].codigo if proyectos|length>1 else proyectos[0].codigo if proyectos }}">importe fijo + resto</span>
         <span class="pill" data-fill="según superficie">por driver</span>
         <span class="pill" data-fill="el doble a {{ proyectos[0].codigo if proyectos }} que a {{ proyectos[1].codigo if proyectos|length>1 else proyectos[0].codigo if proyectos }}">pesos relativos</span>
+        <span class="pill" data-fill="la mitad a {{ proyectos[0].codigo if proyectos }}, el resto a los demás">fracciones</span>
+        <span class="pill" data-fill="20% a cada uno">a cada uno</span>
       </div>
 
       <div class="actions" style="margin-top:14px">
@@ -90,9 +92,12 @@
           <li><code>a partes iguales entre A, B, C</code></li>
           <li><code>todo a A</code> / <code>100% A</code></li>
           <li><code>1.500 € a A y el resto a B</code> — importes fijos + resto</li>
+          <li><code>la mitad a A, un tercio a B</code> — fracciones en palabras</li>
+          <li><code>60% a A, el resto a los demás</code> — el resto entre los no asignados</li>
+          <li><code>20% a cada uno</code> / <code>300 € a cada proyecto</code></li>
           <li><code>por m2: A 100, B 300</code> — pesos explícitos</li>
           <li><code>el doble a A que a B</code> — pesos relativos</li>
-          <li><code>según superficie</code> — usa el driver guardado en cada proyecto</li>
+          <li><code>según superficie</code> / <code>proporcional a horas</code> — por driver</li>
           <li><code>como la regla NOMBRE</code> — reutiliza una regla guardada</li>
           <li><code>según la regla NOMBRE, solo A y B</code> — reescala a un subconjunto (o <code>excepto C</code>)</li>
           <li><code>50% como la regla NOMBRE, resto a Z</code> — combina una regla con reparto directo</li>

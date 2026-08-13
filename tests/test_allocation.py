@@ -196,6 +196,90 @@ def test_pesos_relativos_mitad():
     assert r.repartido == Decimal("900.00")
 
 
+def test_fraccion_mitad_resto():
+    r = allocate("1000", "la mitad a PROY1 y el resto a PROY2", _projs())
+    assert r.ok
+    assert imp(r, "PROY1") == Decimal("500.00")
+    assert imp(r, "PROY2") == Decimal("500.00")
+
+
+def test_fraccion_tercios():
+    r = allocate("900", "un tercio a PROY1, un tercio a PROY2, un tercio a PROY3", _projs())
+    assert r.ok
+    assert imp(r, "PROY1") == Decimal("300.00")
+    assert imp(r, "PROY2") == Decimal("300.00")
+    assert imp(r, "PROY3") == Decimal("300.00")
+    assert r.repartido == Decimal("900.00")
+
+
+def test_fraccion_dos_tercios():
+    r = allocate("900", "dos tercios a PROY1 y un tercio a PROY2", _projs())
+    assert r.ok
+    assert imp(r, "PROY1") == Decimal("600.00")
+    assert imp(r, "PROY2") == Decimal("300.00")
+
+
+def test_fraccion_tres_cuartos():
+    r = allocate("1000", "tres cuartos a PROY1, el resto a PROY2", _projs())
+    assert r.ok
+    assert imp(r, "PROY1") == Decimal("750.00")
+    assert imp(r, "PROY2") == Decimal("250.00")
+
+
+def test_mitad_y_mitad():
+    r = allocate("1000", "mitad y mitad entre PROY1 y PROY2", _projs())
+    assert r.ok
+    assert imp(r, "PROY1") == Decimal("500.00")
+    assert imp(r, "PROY2") == Decimal("500.00")
+
+
+def test_a_medias():
+    r = allocate("1000", "a medias PROY1 y PROY2", _projs())
+    assert r.ok
+    assert imp(r, "PROY1") == Decimal("500.00")
+    assert imp(r, "PROY2") == Decimal("500.00")
+
+
+def test_resto_a_los_demas():
+    r = allocate("1000", "60% a PROY1, el resto a los demás", _projs())
+    assert r.ok
+    assert imp(r, "PROY1") == Decimal("600.00")
+    assert imp(r, "PROY2") == Decimal("200.00")
+    assert imp(r, "PROY3") == Decimal("200.00")
+
+
+def test_cada_uno_porcentaje():
+    r = allocate("1000", "20% a cada uno", _projs())
+    assert r.ok
+    assert imp(r, "PROY1") == Decimal("200.00")
+    assert imp(r, "PROY2") == Decimal("200.00")
+    assert imp(r, "PROY3") == Decimal("200.00")
+
+
+def test_cada_uno_importe():
+    r = allocate("1000", "300 € a cada proyecto", _projs())
+    assert r.ok
+    assert imp(r, "PROY1") == Decimal("300.00")
+    assert imp(r, "PROY2") == Decimal("300.00")
+    assert imp(r, "PROY3") == Decimal("300.00")
+
+
+def test_sobrante_sinonimo():
+    r = allocate("1000", "700 € a PROY1, lo que sobra a PROY2", _projs())
+    assert r.ok
+    assert imp(r, "PROY1") == Decimal("700.00")
+    assert imp(r, "PROY2") == Decimal("300.00")
+
+
+def test_proporcional_a_driver():
+    r = allocate("1000", "proporcional a superficie", _projs())
+    assert r.ok
+    # superficie 100/300/100 -> 200/600/200
+    assert imp(r, "PROY1") == Decimal("200.00")
+    assert imp(r, "PROY2") == Decimal("600.00")
+    assert imp(r, "PROY3") == Decimal("200.00")
+
+
 def test_empty():
     r = allocate("1000", "", _projs())
     assert not r.ok
