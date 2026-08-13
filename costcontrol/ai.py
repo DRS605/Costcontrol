@@ -280,7 +280,11 @@ def _interpretar_anthropic(prompt: str) -> dict:
         msg = client.messages.create(
             model=_model(),
             max_tokens=400,
-            system=_SYSTEM,
+            # El prompt de sistema es fijo -> caché de prompt: en llamadas
+            # seguidas su coste de entrada baja ~10x (clave para el margen al
+            # facturar el producto).
+            system=[{"type": "text", "text": _SYSTEM,
+                     "cache_control": {"type": "ephemeral"}}],
             messages=[{"role": "user", "content": prompt}],
             output_config={"format": {"type": "json_schema", "schema": _SCHEMA}},
         )

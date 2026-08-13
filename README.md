@@ -190,6 +190,23 @@ Claude solo se envía **el texto del reparto** y los **códigos/nombres de proye
 nunca importes, terceros ni la base de datos. En modo `auto`, la IA solo se usa
 cuando el motor local no entiende la frase. Revisa el estado en **Ajustes**.
 
+### Como producto (SaaS) — coste de la IA
+
+Si vendes CostControl como servicio, configura **una sola** `ANTHROPIC_API_KEY` en el
+servidor: tus clientes no ven ni configuran nada. El coste de la IA es **marginal**:
+
+- La tarea (traducir una frase corta) es diminuta: ≈ 1.000 tokens de entrada y 80 de
+  salida. Con `claude-haiku-4-5` sale a **≈ 0,15 céntimos por reparto**.
+- El **modo `auto`** (por defecto) solo llama a la IA cuando el motor local no entiende
+  la frase, así que la mayoría de repartos **no cuestan nada**.
+- El prompt de sistema va con **caché de prompt**, bajando aún más el coste en ráfagas.
+
+Estimación por cliente y mes: un uso intenso (varios cientos de traducciones por IA)
+ronda **0,50–1 € de coste**, frente a una cuota de 50–75 €. Es **~1–2 % de COGS**. Para
+más calidad puedes subir a `COSTCONTROL_AI_MODEL=claude-sonnet-4-6` (≈ 3× coste, sigue
+siendo trivial). A gran escala (cientos de clientes) puedes autohospedar el proveedor
+`local` en tu servidor y dejar el coste por reparto en cero.
+
 ## Pruebas
 
 ```bash
