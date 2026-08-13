@@ -180,6 +180,22 @@ def test_regla_circular_no_cuelga():
     assert not r.ok  # detecta el ciclo y no se cuelga
 
 
+def test_pesos_relativos_doble():
+    r = allocate("900", "el doble a PROY1 que a PROY2", _projs())
+    assert r.ok
+    assert imp(r, "PROY1") == Decimal("600.00")   # peso 2 de 3
+    assert imp(r, "PROY2") == Decimal("300.00")   # peso 1 de 3
+    assert r.repartido == Decimal("900.00")
+
+
+def test_pesos_relativos_mitad():
+    r = allocate("900", "la mitad a PROY1 que a PROY2", _projs())
+    assert r.ok
+    assert imp(r, "PROY1") == Decimal("300.00")   # peso 0.5
+    assert imp(r, "PROY2") == Decimal("600.00")   # peso 1
+    assert r.repartido == Decimal("900.00")
+
+
 def test_empty():
     r = allocate("1000", "", _projs())
     assert not r.ok

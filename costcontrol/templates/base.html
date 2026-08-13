@@ -50,6 +50,7 @@
       </nav>
 
       <div class="side-foot">
+        <a href="{{ url_for('ajustes') }}" class="nav-item {{ 'active' if ep.startswith('ajustes') }}">{{ ico.icon('ajustes') }}<span>Ajustes {% if ia_activa %}<span class="ia-dot" title="IA activa"></span>{% endif %}</span></a>
         {% if auth_activo %}<a href="{{ url_for('logout') }}" class="nav-item">{{ ico.icon('salir') }}<span>Salir</span></a>{% endif %}
         <span class="side-ver">CostControl v{{ version }}</span>
       </div>

@@ -10,7 +10,7 @@ from flask import (Flask, Response, abort, flash, redirect, render_template,
                    request, send_file, session, url_for)
 import io
 
-from . import charts, db, importer
+from . import ai, charts, db, importer
 from .allocation import Allocator, Project, money
 
 MESES = ["", "Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"]
@@ -100,6 +100,44 @@ def _allocator(conn):
     return Allocator(_projects_for_allocator(conn), rules=rules)
 
 
+def _interpretar(alloc, importe, texto):
+    """Interpreta el reparto: motor determinista + IA opcional como refuerzo.
+
+    - Modo 'siempre': la IA traduce primero la frase a la sintaxis canónica y el
+      motor la evalúa; si la IA falla, se usa el motor directamente.
+    - Modo 'auto' (por defecto con clave): se intenta el motor determinista y,
+      solo si no entiende la frase, se recurre a la IA para traducirla.
+    - Sin clave / modo 'off': solo el motor determinista (100 % local).
+
+    En todos los casos el importe exacto lo calcula el motor, no la IA.
+    """
+    modo = ai.mode()
+
+    def _con_ia(res_previo=None):
+        r = ai.interpretar(importe, texto, alloc.projects, alloc.rules_map())
+        if not r["ok"]:
+            return None
+        res2 = alloc.allocate(importe, r["reparto"])
+        res2.ia = {"usada": True, "reparto": r["reparto"], "nota": r["nota"],
+                   "original": texto}
+        if res2.ok:
+            res2.explanation.insert(
+                0, f'Interpretado con IA como: «{r["reparto"]}».')
+        return res2
+
+    if modo == "siempre" and ai.available():
+        out = _con_ia()
+        if out is not None and out.ok:
+            return out
+
+    res = alloc.allocate(importe, texto)
+    if not res.ok and modo in ("auto", "siempre") and ai.available():
+        out = _con_ia(res)
+        if out is not None and out.ok:
+            return out
+    return res
+
+
 @app.template_filter("eur")
 def eur(value):
     try:
@@ -115,7 +153,13 @@ def eur(value):
 @app.context_processor
 def inject_globals():
     return {"version": __import__("costcontrol").__version__,
-            "auth_activo": bool(PASSWORD)}
+            "auth_activo": bool(PASSWORD),
+            "ia_activa": ai.available()}
+
+
+@app.route("/ajustes")
+def ajustes():
+    return render_template("ajustes.html", ia=ai.status())
 
 
 # --- panel ----------------------------------------------------------------
@@ -470,7 +514,7 @@ def reparto_previsualizar(did):
     alloc = _allocator(conn)
     conn.close()
     texto = request.json.get("texto", "") if request.is_json else request.form.get("texto", "")
-    res = alloc.allocate(doc["importe"], texto)
+    res = _interpretar(alloc, doc["importe"], texto)
     return {
         "ok": res.ok,
         "criterio": res.criterio,
@@ -483,6 +527,7 @@ def reparto_previsualizar(did):
         ],
         "explicacion": res.explanation,
         "avisos": res.warnings,
+        "ia": res.ia,
     }
 
 
@@ -499,7 +544,7 @@ def reparto_guardar(did):
         return redirect(url_for("documento_reparto", did=did))
     alloc = _allocator(conn)
     texto = request.form.get("texto", "")
-    res = alloc.allocate(doc["importe"], texto)
+    res = _interpretar(alloc, doc["importe"], texto)
     if not res.ok:
         conn.close()
         flash("No se pudo interpretar el reparto: " + " ".join(res.warnings), "error")
@@ -507,16 +552,20 @@ def reparto_guardar(did):
 
     # mapa código -> id
     cod2id = {p["codigo"]: p["id"] for p in db.list_proyectos(conn)}
+    origen = texto.strip()
+    if res.ia and res.ia.get("usada"):
+        origen = f'{texto.strip()} → IA: {res.ia.get("reparto")}'
     lines = [{
         "proyecto_id": cod2id.get(l.proyecto),
         "proyecto_codigo": l.proyecto,
         "importe": float(l.importe),
         "porcentaje": float(l.porcentaje),
-        "base": f"{texto.strip()} · {l.base}",
+        "base": f"{origen} · {l.base}",
     } for l in res.lines]
     db.replace_repartos(conn, did, lines)
     conn.close()
-    flash(f"Reparto guardado: {len(lines)} línea(s) analítica(s).", "ok")
+    extra = " (interpretado con IA)" if res.ia and res.ia.get("usada") else ""
+    flash(f"Reparto guardado: {len(lines)} línea(s) analítica(s).{extra}", "ok")
     return redirect(url_for("documento_reparto", did=did))
 
 
@@ -674,19 +723,33 @@ def reparto_masivo_aplicar():
     cod2id = {p["codigo"]: p["id"] for p in db.list_proyectos(conn)}
     docs = db.list_documentos(conn, ids=ids)
     cerrados = db.cierres_set(conn)
+
+    # La misma frase se aplica a muchos documentos: si hace falta la IA, se
+    # traduce UNA sola vez a la sintaxis canónica y luego se aplica a cada
+    # documento con el motor determinista (importe recalculado por documento).
+    efectivo, ia_usada = texto, False
+    modo = ai.mode()
+    if modo != "off" and ai.available():
+        probe = allocator.allocate(Decimal("1000"), texto)
+        if modo == "siempre" or not probe.ok:
+            r = ai.interpretar(1000, texto, allocator.projects, allocator.rules_map())
+            if r["ok"]:
+                efectivo, ia_usada = r["reparto"], True
+
     aplicados, fallidos, bloqueados = 0, 0, 0
     for d in docs:
         if (d.get("ejercicio"), d.get("periodo")) in cerrados:
             bloqueados += 1
             continue
-        res = allocator.allocate(d["importe"], texto)
+        res = allocator.allocate(d["importe"], efectivo)
         if res.ok and res.lines:
+            origen = texto.strip() if not ia_usada else f"{texto.strip()} → IA: {efectivo}"
             lines = [{
                 "proyecto_id": cod2id.get(l.proyecto),
                 "proyecto_codigo": l.proyecto,
                 "importe": float(l.importe),
                 "porcentaje": float(l.porcentaje),
-                "base": f"[masivo] {texto.strip()} · {l.base}",
+                "base": f"[masivo] {origen} · {l.base}",
             } for l in res.lines]
             db.replace_repartos(conn, d["id"], lines)
             aplicados += 1
@@ -694,6 +757,8 @@ def reparto_masivo_aplicar():
             fallidos += 1
     conn.close()
     msg = f"Reparto masivo aplicado a {aplicados} documento(s)."
+    if ia_usada:
+        msg += " (interpretado con IA)"
     if fallidos:
         msg += f" {fallidos} no se pudieron interpretar."
     if bloqueados:

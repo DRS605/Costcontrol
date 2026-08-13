@@ -26,6 +26,7 @@ herramienta traduce ese texto libre a líneas analíticas concretas.
   | `todo a PROY-A` | 100 % a un proyecto |
   | `1.500 € a PROY-A y el resto a PROY-B` | importe fijo + resto |
   | `por m2: PROY-A 100, PROY-B 300` | ponderado por pesos |
+  | `el doble a PROY-A que a PROY-B` | pesos relativos (2 : 1) |
   | `según superficie` | ponderado por un *driver* guardado en cada proyecto |
   | `PROY-A 30%, PROY-B 500 €, resto PROY-C` | mezcla de %, importe y resto |
   | `como la regla Obra estándar` | reutiliza una **regla guardada** por su nombre |
@@ -41,6 +42,13 @@ herramienta traduce ese texto libre a líneas analíticas concretas.
 
   Cada reparto muestra una **traducción legible** de lo interpretado y avisa si
   algo no cuadra (queda importe sin repartir, se pasa del total, etc.).
+- 🤖 **Intérprete con IA (opcional).** El motor anterior funciona **100 % en
+  local**. Si además configuras una clave de API de Anthropic, CostControl
+  entiende frases mucho más libres —*«la mitad para la nave y el resto repártelo
+  entre los demás según las horas»*— traduciéndolas a su sintaxis exacta antes de
+  calcular. **La IA solo traduce la frase; el importe lo calcula siempre el motor
+  local** con aritmética de céntimos, y ves la traducción para revisarla. Sin
+  clave, la app no envía nada fuera del equipo (ver *Privacidad de la IA*).
 - ⚡ **Reparto masivo**: aplica una misma regla a muchos documentos a la vez
   (filtrando por centro, cuenta, periodo, tipo o estado). Ideal para costes
   indirectos y de estructura.
@@ -123,6 +131,7 @@ propio texto: `por m2: PROY-A 100, PROY-B 300`.
 ```
 costcontrol/
   allocation.py   # motor de reparto en lenguaje natural (el núcleo)
+  ai.py           # intérprete de repartos con IA (opcional, Claude)
   db.py           # acceso a datos (SQLite, stdlib) + migraciones
   importer.py     # importación / exportación Excel (openpyxl) + backup
   charts.py       # gráficos SVG en línea (sin dependencias)
@@ -149,6 +158,19 @@ anterior.
 | `COSTCONTROL_UPLOADS` | Carpeta donde se guardan los adjuntos (por defecto `uploads/`). |
 | `COSTCONTROL_PASSWORD` | Si se define, exige contraseña para entrar (pantalla de login). Sin ella, acceso libre. |
 | `COSTCONTROL_SECRET` | Clave de sesión de Flask (defínela en producción). |
+| `ANTHROPIC_API_KEY` (o `COSTCONTROL_AI_KEY`) | Activa el intérprete de repartos con IA. Sin ella, la app funciona 100 % en local. |
+| `COSTCONTROL_AI_MODE` | `auto` (por defecto con clave: usa la IA solo si el motor local no entiende la frase), `siempre` (traduce siempre con IA) u `off`. |
+| `COSTCONTROL_AI_MODEL` | Modelo a usar (por defecto `claude-haiku-4-5`, rápido y barato). |
+
+### Privacidad de la IA
+
+- **Sin clave, nada sale de tu equipo**: todo lo resuelve el motor determinista local.
+- Con la IA activa solo se envía a Anthropic **el texto del reparto** y la lista de
+  **códigos/nombres de proyecto** (para mapear la frase). **No** se envían importes de
+  documentos, terceros ni la base de datos.
+- En modo `auto`, la IA solo se llama cuando el motor local no entiende la frase.
+- Requiere instalar la librería opcional: `pip install anthropic`.
+- Puedes revisar el estado de la IA en **Ajustes** (menú lateral).
 
 ## Pruebas
 

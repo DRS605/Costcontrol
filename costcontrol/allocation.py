@@ -117,6 +117,7 @@ class AllocationResult:
     explanation: List[str] = field(default_factory=list)
     warnings: List[str] = field(default_factory=list)
     criterio: str = ""     # etiqueta del modo detectado
+    ia: Optional[dict] = None  # info de la interpretación con IA, si se usó
 
     @property
     def repartido(self) -> Decimal:
@@ -165,6 +166,10 @@ class Allocator:
             for nombre, texto in items:
                 if nombre and texto:
                     self._rules[norm(nombre)] = (nombre, texto)
+
+    def rules_map(self) -> Dict[str, str]:
+        """Devuelve las reglas guardadas como {nombre: texto} (para la IA)."""
+        return {nombre: texto for (nombre, texto) in self._rules.values()}
 
     def _match_rule(self, tail: str):
         """Encuentra la regla cuyo nombre encabeza el texto tras 'regla'.
@@ -215,6 +220,32 @@ class Allocator:
                 seen.add(p.codigo)
         return found
 
+    # multiplicadores relativos ("el doble", "la mitad", "el triple"...)
+    _MULT = {
+        "doble": Decimal("2"), "duplo": Decimal("2"), "triple": Decimal("3"),
+        "cuadruple": Decimal("4"), "quintuple": Decimal("5"),
+        "mitad": Decimal("0.5"), "tercio": Decimal("1") / Decimal("3"),
+        "cuarto": Decimal("0.25"), "doble mas": Decimal("2"),
+    }
+    _REL_RE = re.compile(
+        r"\b(?:el|la)\s+(doble|duplo|triple|cuadruple|quintuple|mitad|tercio|cuarto)\b"
+        r"(.*?)\bque\s+a?\b(.*)", re.DOTALL)
+
+    def _relative_weights(self, raw: str):
+        """Detecta 'el doble a A que a B' -> ([A,B], [2,1]). None si no aplica."""
+        n = norm(raw)
+        m = self._REL_RE.search(n)
+        if not m:
+            return None
+        mult = self._MULT.get(m.group(1))
+        if mult is None:
+            return None
+        left = self._find_projects_in(m.group(2))
+        right = self._find_projects_in(m.group(3))
+        if len(left) != 1 or len(right) != 1 or left[0].codigo == right[0].codigo:
+            return None
+        return ([left[0], right[0]], [mult, Decimal("1")])
+
     def _detect_driver(self, text: str) -> Optional[str]:
         n = norm(text)
         for prep in _WEIGHT_PREPS:
@@ -254,6 +285,18 @@ class Allocator:
                     "No se ha encontrado esa regla. Reglas guardadas: "
                     + ", ".join(sorted(v[0] for v in self._rules.values())))
                 return res
+
+        # ---- MODO: pesos relativos ("el doble a A que a B") -------------
+        if "%" not in raw and not re.search(r"€|eur", raw, re.IGNORECASE):
+            rel = self._relative_weights(raw)
+            if rel:
+                projs, weights = rel
+                res.criterio = "pesos relativos"
+                out = self._weighted(total, projs, weights, res, "proporción indicada")
+                out.explanation.insert(
+                    0, f"Reparto proporcional: {projs[0].codigo} recibe "
+                       f"{weights[0]}× respecto a {projs[1].codigo}.")
+                return out
 
         equal_mode = any(k in n for k in _EQUAL_KW)
         driver = self._detect_driver(raw)

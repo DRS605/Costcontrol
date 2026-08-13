@@ -1,3 +1,6 @@
 Flask>=3.0
 openpyxl>=3.1
 gunicorn>=21  # solo para hosting tipo Render/Railway; PythonAnywhere no lo usa
+# Opcional: intérprete de repartos con IA. Sin esto, la app funciona 100% en
+# local con el motor determinista. Para activar la IA:  pip install anthropic
+# anthropic>=0.40

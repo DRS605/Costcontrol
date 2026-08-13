@@ -193,6 +193,9 @@ textarea { resize: vertical; min-height: 74px; }
 .flash.error { background: var(--err-bg); color: var(--err); border: 1px solid #f0c9c5; }
 .warnbox { background: var(--warn-bg); border: 1px solid #f0dcae; color: var(--warn); border-radius: var(--radius-sm); padding: 10px 13px; margin-top: 10px; font-size: 13.5px; }
 .okbox { background: var(--ok-bg); border: 1px solid #c2e39d; color: var(--ok); border-radius: var(--radius-sm); padding: 10px 13px; margin-top: 10px; font-size: 13.5px; }
+.iabox { background: linear-gradient(100deg,#f3fbe6,#eefbf4); border: 1px solid #cdeaa6; color: #2f5312; border-radius: var(--radius-sm); padding: 11px 14px; margin-top: 12px; font-size: 13.5px; }
+.iabox code { background: #fff; border: 1px solid #cfe6ad; color: #2f5312; padding: 1px 7px; border-radius: 6px; font-weight: 600; }
+.ia-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--lime); margin-left: 4px; vertical-align: middle; box-shadow: 0 0 0 2px rgba(143,220,31,.25); }
 
 /* ---------- ayudas / pills ---------- */
 .tag-help { background: #f3f8ec; border: 1px solid #dcecc4; border-radius: var(--radius-sm); padding: 13px 15px; font-size: 13.5px; }

@@ -28,9 +28,16 @@
 
 <div class="split">
   <div class="card">
-    <h2>Escribe el reparto a mano</h2>
+    <div class="actions" style="justify-content:space-between; align-items:center; margin-bottom:4px">
+      <h2 style="margin:0">Escribe el reparto como lo dirías</h2>
+      {% if ia_activa %}
+      <span class="badge b-ok" title="La IA traduce frases libres a un reparto exacto.">✨ IA activa</span>
+      {% else %}
+      <span class="badge" title="Funciona 100% en local con el motor determinista. Activa la IA con tu clave de API para entender frases más libres." style="background:#eef0ee;color:#5a625b">Motor local</span>
+      {% endif %}
+    </div>
     <form method="post" action="{{ url_for('reparto_guardar', did=doc.id) }}" id="reparto-form">
-      <textarea name="texto" id="texto" rows="3" placeholder="Ej.: 60% al PROY-A y el resto al PROY-B">{{ texto_previo }}</textarea>
+      <textarea name="texto" id="texto" rows="3" placeholder="Ej.: la mitad para {{ proyectos[0].codigo if proyectos }}, el resto repártelo entre los demás según las horas">{{ texto_previo }}</textarea>
 
       <div class="pill-examples">
         <span class="pill" data-fill="60% {{ proyectos[0].codigo if proyectos }}, 40% {{ proyectos[1].codigo if proyectos|length>1 else proyectos[0].codigo if proyectos }}">porcentajes</span>
@@ -38,6 +45,7 @@
         <span class="pill" data-fill="todo a {{ proyectos[0].codigo if proyectos }}">todo a uno</span>
         <span class="pill" data-fill="1.000 € a {{ proyectos[0].codigo if proyectos }} y el resto a {{ proyectos[1].codigo if proyectos|length>1 else proyectos[0].codigo if proyectos }}">importe fijo + resto</span>
         <span class="pill" data-fill="según superficie">por driver</span>
+        <span class="pill" data-fill="el doble a {{ proyectos[0].codigo if proyectos }} que a {{ proyectos[1].codigo if proyectos|length>1 else proyectos[0].codigo if proyectos }}">pesos relativos</span>
       </div>
 
       <div class="actions" style="margin-top:14px">
@@ -83,6 +91,7 @@
           <li><code>todo a A</code> / <code>100% A</code></li>
           <li><code>1.500 € a A y el resto a B</code> — importes fijos + resto</li>
           <li><code>por m2: A 100, B 300</code> — pesos explícitos</li>
+          <li><code>el doble a A que a B</code> — pesos relativos</li>
           <li><code>según superficie</code> — usa el driver guardado en cada proyecto</li>
           <li><code>como la regla NOMBRE</code> — reutiliza una regla guardada</li>
           <li><code>según la regla NOMBRE, solo A y B</code> — reescala a un subconjunto (o <code>excepto C</code>)</li>
@@ -174,6 +183,11 @@ async function preview(){
 
 function render(d){
   let html = '';
+  if(d.ia && d.ia.usada){
+    html += `<div class="iabox">✨ <b>La IA lo ha entendido</b> y lo ha traducido a: <code>${d.ia.reparto}</code>`
+          + (d.ia.nota ? `<div class="small muted" style="margin-top:4px">${d.ia.nota}</div>` : '')
+          + `</div>`;
+  }
   if(d.lineas && d.lineas.length){
     html += '<table id="preview-lines" style="margin-top:14px"><thead><tr><th>Proyecto</th><th class="num">%</th><th class="num">Importe</th><th>Base</th></tr></thead><tbody>';
     d.lineas.forEach(l=>{

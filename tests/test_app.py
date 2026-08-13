@@ -274,6 +274,20 @@ def run():
     assert reabierto
     print("  ok  reabrir periodo"); ok += 1
 
+    # --- Ajustes / IA opcional -------------------------------------------
+    r = client.get("/ajustes")
+    assert r.status_code == 200 and "IA".encode() in r.data
+    print("  ok  página de ajustes"); ok += 1
+
+    # sin clave de API la IA está desactivada y el motor local resuelve solo
+    from costcontrol import ai
+    assert ai.available() is False, "la IA no debería estar activa sin clave"
+    r = client.post(f"/documentos/{did1}/reparto/previsualizar",
+                    json={"texto": "el doble a PROY-A que a PROY-B"})
+    d = r.get_json()
+    assert d["ok"] and d.get("ia") is None, "el reparto local debe funcionar sin IA"
+    print("  ok  reparto local sin IA (pesos relativos)"); ok += 1
+
     print(f"\nTODO OK ({ok} comprobaciones)")
 
 
