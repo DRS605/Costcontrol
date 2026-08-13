@@ -11,8 +11,10 @@
 <div class="card">
   <div class="actions" style="justify-content:space-between; align-items:center">
     <h2 style="margin:0">✨ Intérprete de repartos con IA</h2>
-    {% if ia.activa %}
-      <span class="badge b-ok">Activa · modo {{ ia.modo }}</span>
+    {% if ia.activa and ia.get('conectado', True) %}
+      <span class="badge b-ok">Activa · {{ ia.proveedor }} · modo {{ ia.modo }}</span>
+    {% elif ia.activa %}
+      <span class="badge b-aviso">Configurada · sin conexión</span>
     {% else %}
       <span class="badge" style="background:#eef0ee;color:#5a625b">Desactivada</span>
     {% endif %}
@@ -20,37 +22,57 @@
 
   <p class="small muted" style="margin-top:6px">{{ ia.detalle }}</p>
 
-  {% if ia.activa %}
+  {% if ia.activa and ia.proveedor == 'local' and ia.get('conectado', True) %}
   <div class="okbox" style="margin-top:10px">
-    La IA está activa con el modelo <code>{{ ia.modelo }}</code>. Cuando escribas un
-    reparto que el motor local no entienda, la IA lo traducirá a la sintaxis exacta
-    de CostControl. <b>La IA solo traduce la frase; el importe lo calcula siempre el
-    motor local.</b>
+    IA <b>local y gratuita</b> activa con el modelo <code>{{ ia.modelo }}</code> en
+    <code>{{ ia.url }}</code>. Todo se procesa en tu equipo: <b>nada sale a internet</b>.
+    La IA solo traduce la frase; el importe lo calcula el motor local.
   </div>
-  {% else %}
+  {% elif ia.activa and ia.proveedor == 'anthropic' %}
+  <div class="okbox" style="margin-top:10px">
+    IA de Claude activa con el modelo <code>{{ ia.modelo }}</code> (servicio de pago,
+    muy económico). La IA solo traduce la frase; el importe lo calcula el motor local.
+  </div>
+  {% endif %}
+
+  {% if not ia.activa or (ia.proveedor == 'local' and not ia.get('conectado', True)) %}
   <p style="margin-top:10px">CostControl funciona <b>100 % en local</b> con su motor
-  determinista. La IA es <b>opcional</b> y añade comprensión de frases más libres
-  («la mitad para el primero y el resto según las horas»). Para activarla:</p>
-  <ol class="small" style="line-height:1.9">
-    <li>Consigue una clave de API de Anthropic en <code>console.anthropic.com</code>.</li>
-    <li>Define la variable de entorno antes de arrancar la app:
-      <div class="tag-help" style="margin-top:6px"><code>ANTHROPIC_API_KEY = tu-clave</code></div>
-    </li>
-    <li>(Opcional) <code>COSTCONTROL_AI_MODE = auto</code> (por defecto) o <code>siempre</code>,
-      y <code>COSTCONTROL_AI_MODEL = claude-haiku-4-5</code>.</li>
-    <li>Reinicia CostControl. Verás el distintivo <b>✨ IA activa</b> en la pantalla de reparto.</li>
-  </ol>
+  determinista, que ya entiende la mayoría de repartos. La IA es <b>opcional</b> y
+  añade comprensión de frases más libres. Tienes dos formas de activarla:</p>
+
+  <div class="grid cols2" style="margin-top:12px">
+    <div class="tag-help">
+      <b>🆓 Opción gratis y privada (recomendada)</b>
+      <p class="small" style="margin:6px 0">Un modelo de IA en tu propio portátil. Gratis,
+      sin límites y sin que nada salga de tu equipo.</p>
+      <ol class="small" style="line-height:1.8; padding-left:18px; margin:0">
+        <li>Instala <b>Ollama</b> desde <code>ollama.com</code> (Windows/Mac/Linux).</li>
+        <li>Descarga un modelo pequeño:<br><code>ollama pull llama3.2</code></li>
+        <li>Arranca CostControl con:<br><code>COSTCONTROL_AI_PROVIDER = local</code></li>
+        <li>Listo: verás <b>✨ IA activa</b> en la pantalla de reparto.</li>
+      </ol>
+    </div>
+    <div class="tag-help">
+      <b>☁️ Opción en la nube (Claude)</b>
+      <p class="small" style="margin:6px 0">Más potente, de pago (céntimos por reparto).
+      Envía el texto del reparto a Anthropic.</p>
+      <ol class="small" style="line-height:1.8; padding-left:18px; margin:0">
+        <li><code>pip install anthropic</code></li>
+        <li>Clave en <code>console.anthropic.com</code>.</li>
+        <li>Arranca con:<br><code>ANTHROPIC_API_KEY = tu-clave</code></li>
+      </ol>
+    </div>
+  </div>
   {% endif %}
 
   <div class="tag-help" style="margin-top:14px">
     <b>Privacidad</b>
     <ul style="margin:8px 0 0; padding-left:18px" class="small">
-      <li>Sin clave de API, <b>nada sale de tu equipo</b>: el motor local resuelve todo.</li>
-      <li>Con la IA activa, solo se envía a Anthropic <b>el texto del reparto</b> y la lista
-        de códigos/nombres de proyecto para traducir la frase. No se envían importes de
-        documentos, terceros ni la base de datos.</li>
-      <li>En modo <code>auto</code> la IA solo se llama cuando el motor local no entiende la frase,
-        minimizando lo que se envía.</li>
+      <li>Sin IA, <b>nada sale de tu equipo</b>: el motor local resuelve todo.</li>
+      <li>Con la IA <b>local</b> (Ollama), tampoco: la traducción ocurre en tu portátil.</li>
+      <li>Con la IA <b>de Claude</b>, solo se envía <b>el texto del reparto</b> y los
+        códigos/nombres de proyecto. Nunca importes, terceros ni la base de datos.</li>
+      <li>En modo <code>auto</code> la IA solo se usa cuando el motor local no entiende la frase.</li>
     </ul>
   </div>
 </div>

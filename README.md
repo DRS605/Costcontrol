@@ -47,12 +47,13 @@ herramienta traduce ese texto libre a líneas analíticas concretas.
   Cada reparto muestra una **traducción legible** de lo interpretado y avisa si
   algo no cuadra (queda importe sin repartir, se pasa del total, etc.).
 - 🤖 **Intérprete con IA (opcional).** El motor anterior funciona **100 % en
-  local**. Si además configuras una clave de API de Anthropic, CostControl
-  entiende frases mucho más libres —*«la mitad para la nave y el resto repártelo
-  entre los demás según las horas»*— traduciéndolas a su sintaxis exacta antes de
-  calcular. **La IA solo traduce la frase; el importe lo calcula siempre el motor
-  local** con aritmética de céntimos, y ves la traducción para revisarla. Sin
-  clave, la app no envía nada fuera del equipo (ver *Privacidad de la IA*).
+  local**. Si además activas la IA, CostControl entiende frases mucho más libres
+  —*«la mitad para la nave y el resto repártelo entre los demás según las horas»*—
+  traduciéndolas a su sintaxis exacta antes de calcular. Puedes usar una **IA
+  local gratuita y privada** (Ollama, no sale nada de tu equipo) o la **API de
+  Claude** (de pago). **La IA solo traduce la frase; el importe lo calcula siempre
+  el motor local** con aritmética de céntimos, y ves la traducción para revisarla
+  (ver *IA de repartos*).
 - ⚡ **Reparto masivo**: aplica una misma regla a muchos documentos a la vez
   (filtrando por centro, cuenta, periodo, tipo o estado). Ideal para costes
   indirectos y de estructura.
@@ -162,19 +163,32 @@ anterior.
 | `COSTCONTROL_UPLOADS` | Carpeta donde se guardan los adjuntos (por defecto `uploads/`). |
 | `COSTCONTROL_PASSWORD` | Si se define, exige contraseña para entrar (pantalla de login). Sin ella, acceso libre. |
 | `COSTCONTROL_SECRET` | Clave de sesión de Flask (defínela en producción). |
-| `ANTHROPIC_API_KEY` (o `COSTCONTROL_AI_KEY`) | Activa el intérprete de repartos con IA. Sin ella, la app funciona 100 % en local. |
-| `COSTCONTROL_AI_MODE` | `auto` (por defecto con clave: usa la IA solo si el motor local no entiende la frase), `siempre` (traduce siempre con IA) u `off`. |
-| `COSTCONTROL_AI_MODEL` | Modelo a usar (por defecto `claude-haiku-4-5`, rápido y barato). |
+| `COSTCONTROL_AI_PROVIDER` | `local` (IA gratis y privada con Ollama), `anthropic` (Claude, de pago), `auto` (por defecto) u `off`. |
+| `COSTCONTROL_AI_MODE` | `auto` (usa la IA solo si el motor local no entiende la frase), `siempre` u `off`. |
+| `COSTCONTROL_AI_MODEL` | Modelo a usar (por defecto `llama3.2` en local, `claude-haiku-4-5` en Anthropic). |
+| `COSTCONTROL_AI_URL` | URL del servidor local (por defecto `http://localhost:11434`, el de Ollama). |
+| `ANTHROPIC_API_KEY` (o `COSTCONTROL_AI_KEY`) | Clave de Claude; activa el proveedor `anthropic`. |
 
-### Privacidad de la IA
+### IA de repartos: gratis y privada, o en la nube
 
-- **Sin clave, nada sale de tu equipo**: todo lo resuelve el motor determinista local.
-- Con la IA activa solo se envía a Anthropic **el texto del reparto** y la lista de
-  **códigos/nombres de proyecto** (para mapear la frase). **No** se envían importes de
-  documentos, terceros ni la base de datos.
-- En modo `auto`, la IA solo se llama cuando el motor local no entiende la frase.
-- Requiere instalar la librería opcional: `pip install anthropic`.
-- Puedes revisar el estado de la IA en **Ajustes** (menú lateral).
+El motor determinista ya entiende la mayoría de repartos **sin conexión ni IA**. Si
+quieres además comprensión de frases muy libres, hay dos formas:
+
+**🆓 Opción gratis y privada (recomendada) — IA local con Ollama.** Corre un modelo
+de IA en tu propio equipo; es gratis, sin límites y **no envía nada a internet**.
+
+1. Instala [Ollama](https://ollama.com) (Windows/Mac/Linux).
+2. Descarga un modelo pequeño: `ollama pull llama3.2`.
+3. Arranca CostControl con `COSTCONTROL_AI_PROVIDER=local`.
+
+**☁️ Opción en la nube — Claude (Anthropic).** Más potente, de pago (céntimos por
+reparto). `pip install anthropic`, consigue tu clave y arranca con
+`ANTHROPIC_API_KEY=tu-clave`.
+
+**Privacidad:** sin IA, o con la IA **local**, nada sale de tu equipo. Con la IA de
+Claude solo se envía **el texto del reparto** y los **códigos/nombres de proyecto**;
+nunca importes, terceros ni la base de datos. En modo `auto`, la IA solo se usa
+cuando el motor local no entiende la frase. Revisa el estado en **Ajustes**.
 
 ## Pruebas
 

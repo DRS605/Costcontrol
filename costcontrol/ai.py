@@ -2,56 +2,62 @@
 
 CostControl funciona **sin conexión** con su motor determinista de reparto. Este
 módulo añade, de forma **totalmente opcional**, una capa de "traducción" con IA
-(Claude) que entiende el texto libre por enrevesado que sea y lo reescribe a la
-sintaxis canónica que el motor ya sabe evaluar.
+que entiende el texto libre por enrevesado que sea y lo reescribe a la sintaxis
+canónica que el motor ya sabe evaluar.
 
-Filosofía de diseño (importante para la privacidad):
+Hay **dos proveedores** de IA, y puedes elegir:
 
-* **Apagado por defecto.** Si no hay clave de API, este módulo no hace nada y la
-  app sigue siendo 100 % local, como siempre.
+* ``local``  → un modelo de IA que corre **en tu propio equipo** con
+  `Ollama <https://ollama.com>`_ (o cualquier servidor compatible). Es
+  **gratis, sin límites y 100 % privado**: no sale nada a internet. Ideal para
+  ti. Requiere instalar Ollama y descargar un modelo pequeño una vez.
+* ``anthropic`` → la API de Claude (de pago, muy barata). Rápida y muy capaz,
+  pero envía el texto del reparto a Anthropic.
+
+Filosofía de diseño (privacidad primero):
+
+* **Apagado por defecto.** Sin configurar nada, la app es 100 % local con su
+  motor determinista.
 * **La IA no calcula el dinero.** Solo *traduce* la frase a la mini-sintaxis de
-  CostControl (p. ej. "40% PROY1, resto PROY2"). El importe exacto lo sigue
-  calculando el motor determinista con aritmética de céntimos, y el usuario ve
-  la traducción para revisarla y editarla.
-* **Se activa solo cuando hace falta.** El flujo normal intenta primero el motor
-  gratis/offline; solo llama a la IA si la frase no se ha entendido (modo
-  ``auto``), minimizando el coste y lo que sale del equipo.
+  CostControl; el importe exacto lo calcula el motor con céntimos, y ves la
+  traducción para revisarla.
+* **Se activa solo cuando hace falta** (modo ``auto``): primero el motor local
+  gratis; la IA solo entra si la frase no se ha entendido.
 
 Configuración por variables de entorno:
 
-    ANTHROPIC_API_KEY   clave de API de Anthropic (o COSTCONTROL_AI_KEY).
-    COSTCONTROL_AI_MODE off | auto | siempre   (por defecto: auto si hay clave)
-    COSTCONTROL_AI_MODEL modelo (por defecto claude-haiku-4-5, rápido y barato)
+    COSTCONTROL_AI_PROVIDER  local | anthropic | auto | off   (por defecto auto)
+    COSTCONTROL_AI_MODE      off | auto | siempre              (por defecto auto)
+    COSTCONTROL_AI_MODEL     modelo a usar (según proveedor)
+    COSTCONTROL_AI_URL       URL del servidor local (por defecto Ollama local)
+    ANTHROPIC_API_KEY        clave de Claude (activa el proveedor anthropic)
 """
 
 from __future__ import annotations
 
 import json
 import os
+import socket
+import urllib.error
+import urllib.request
 from typing import List, Optional, Sequence
 
-_MODEL_DEFAULT = "claude-haiku-4-5"
+_MODEL_ANTHROPIC = "claude-haiku-4-5"
+_MODEL_LOCAL = "llama3.2"
+_URL_LOCAL = "http://localhost:11434"
 
-# Esquema de salida estructurada: la IA devuelve la frase canónica y una nota.
+# Esquema de salida estructurada (proveedor anthropic).
 _SCHEMA = {
     "type": "object",
     "properties": {
-        "entendido": {
-            "type": "boolean",
-            "description": "true si has podido traducir el reparto con seguridad.",
-        },
-        "reparto": {
-            "type": "string",
-            "description": (
-                "El reparto reescrito en la sintaxis canónica de CostControl, "
-                "usando SOLO códigos de proyecto existentes. Cadena vacía si no "
-                "lo entiendes."
-            ),
-        },
-        "nota": {
-            "type": "string",
-            "description": "Explicación breve, en español, de cómo lo has interpretado.",
-        },
+        "entendido": {"type": "boolean",
+                      "description": "true si has traducido el reparto con seguridad."},
+        "reparto": {"type": "string",
+                    "description": "El reparto reescrito en la sintaxis canónica de "
+                                   "CostControl, usando SOLO códigos de proyecto "
+                                   "existentes. Cadena vacía si no lo entiendes."},
+        "nota": {"type": "string",
+                 "description": "Explicación breve, en español, de cómo lo has interpretado."},
     },
     "required": ["entendido", "reparto", "nota"],
     "additionalProperties": False,
@@ -79,39 +85,29 @@ REGLAS IMPORTANTES:
 - Usa SIEMPRE los CÓDIGOS de proyecto de la lista que te doy (no los nombres).
   Si el usuario nombra un proyecto por su nombre o de forma aproximada, mapéalo
   al código correcto.
-- Pesos relativos: "el doble a A que a B" -> "por peso: A 2, B 1";
-  "la mitad a C" respecto a otro -> ajusta los pesos (C 1, otro 2), etc.
-- Si el usuario menciona un criterio (superficie, horas, m2, unidades...) que
-  encaja con un driver disponible, usa "según <driver>".
+- Pesos relativos: "el doble a A que a B" -> "por peso: A 2, B 1".
+- Si el usuario menciona un criterio (superficie, horas, m2...) que encaja con un
+  driver disponible, usa "según <driver>".
 - Si no puedes traducirlo con seguridad, pon entendido=false y reparto="".
 - No inventes proyectos ni reglas que no estén en las listas."""
 
+_JSON_HINT = ('Responde ÚNICAMENTE con un objeto JSON con esta forma exacta, sin '
+              'texto adicional:\n'
+              '{"entendido": true|false, "reparto": "<sintaxis canónica>", '
+              '"nota": "<explicación breve>"}')
+
+
+# --------------------------------------------------------------------------
+# Configuración / detección de proveedor
+# --------------------------------------------------------------------------
 
 def _key() -> str:
     return (os.environ.get("ANTHROPIC_API_KEY")
-            or os.environ.get("COSTCONTROL_AI_KEY")
-            or "").strip()
+            or os.environ.get("COSTCONTROL_AI_KEY") or "").strip()
 
 
-def _mode() -> str:
-    m = (os.environ.get("COSTCONTROL_AI_MODE") or "").strip().lower()
-    if m in ("off", "no", "0", "false"):
-        return "off"
-    if m in ("siempre", "always", "1", "true"):
-        return "siempre"
-    if m in ("auto", ""):
-        return "auto" if _key() else "off"
-    return "auto" if _key() else "off"
-
-
-def available() -> bool:
-    """True si la IA está configurada y activa (hay clave y el modo no es off)."""
-    return bool(_key()) and _mode() != "off" and _sdk_present()
-
-
-def mode() -> str:
-    """'off' | 'auto' | 'siempre' — cómo debe usarse la IA en el flujo."""
-    return _mode() if _sdk_present() else "off"
+def _local_url() -> str:
+    return (os.environ.get("COSTCONTROL_AI_URL") or _URL_LOCAL).rstrip("/")
 
 
 def _sdk_present() -> bool:
@@ -122,21 +118,98 @@ def _sdk_present() -> bool:
         return False
 
 
-def status() -> dict:
-    """Estado legible para mostrar en la interfaz de ajustes."""
-    if not _sdk_present():
-        return {"activa": False, "motivo": "sdk",
-                "detalle": "Falta la librería 'anthropic' (pip install anthropic)."}
-    if not _key():
-        return {"activa": False, "motivo": "sin_clave",
-                "detalle": "No hay clave de API configurada."}
-    if _mode() == "off":
-        return {"activa": False, "motivo": "desactivada",
-                "detalle": "Desactivada por COSTCONTROL_AI_MODE=off."}
-    return {"activa": True, "motivo": "ok", "modo": _mode(),
-            "modelo": os.environ.get("COSTCONTROL_AI_MODEL", _MODEL_DEFAULT),
-            "detalle": f"IA activa (modo {_mode()})."}
+def provider() -> Optional[str]:
+    """Devuelve 'local' | 'anthropic' | None según la configuración."""
+    p = (os.environ.get("COSTCONTROL_AI_PROVIDER") or "").strip().lower()
+    if p in ("off", "no", "0", "false"):
+        return None
+    if p in ("local", "ollama", "lmstudio", "openai-local"):
+        return "local"
+    if p in ("anthropic", "claude"):
+        return "anthropic" if (_key() and _sdk_present()) else None
+    # auto: prioriza lo que esté configurado. Local primero si se marcó URL.
+    if os.environ.get("COSTCONTROL_AI_URL"):
+        return "local"
+    if _key() and _sdk_present():
+        return "anthropic"
+    return None
 
+
+def _mode() -> str:
+    m = (os.environ.get("COSTCONTROL_AI_MODE") or "").strip().lower()
+    if m in ("off", "no", "0", "false"):
+        return "off"
+    if m in ("siempre", "always", "1", "true"):
+        return "siempre"
+    return "auto"
+
+
+def mode() -> str:
+    """'off' | 'auto' | 'siempre' — cómo debe usarse la IA en el flujo."""
+    return _mode() if provider() else "off"
+
+
+def _model() -> str:
+    env = os.environ.get("COSTCONTROL_AI_MODEL")
+    if env:
+        return env
+    return _MODEL_LOCAL if provider() == "local" else _MODEL_ANTHROPIC
+
+
+def _local_reachable(timeout=0.4) -> bool:
+    """Comprueba rápido si el servidor local (Ollama) responde."""
+    url = _local_url()
+    try:
+        host = url.split("://", 1)[-1]
+        host, _, port = host.partition(":")
+        port = int(port or 11434)
+        with socket.create_connection((host, port), timeout=timeout):
+            return True
+    except Exception:
+        return False
+
+
+def available() -> bool:
+    """True si la IA está configurada y activa."""
+    prov = provider()
+    if not prov or _mode() == "off":
+        return False
+    if prov == "anthropic":
+        return bool(_key()) and _sdk_present()
+    if prov == "local":
+        return True   # configurado; la conexión se comprueba al usarla
+    return False
+
+
+def status() -> dict:
+    """Estado legible para la pantalla de Ajustes."""
+    prov = provider()
+    if not prov:
+        return {"activa": False, "proveedor": None,
+                "detalle": "IA desactivada. La app funciona 100 % en local."}
+    if prov == "anthropic":
+        if not _sdk_present():
+            return {"activa": False, "proveedor": "anthropic",
+                    "detalle": "Falta la librería 'anthropic' (pip install anthropic)."}
+        if not _key():
+            return {"activa": False, "proveedor": "anthropic",
+                    "detalle": "No hay clave de API configurada."}
+        return {"activa": True, "proveedor": "anthropic", "modo": _mode(),
+                "modelo": _model(),
+                "detalle": f"IA de Claude activa (modo {_mode()}). Servicio de pago."}
+    # local
+    reach = _local_reachable()
+    return {"activa": True, "proveedor": "local", "modo": _mode(),
+            "modelo": _model(), "url": _local_url(), "conectado": reach,
+            "detalle": (f"IA local activa (modo {_mode()}) — gratis y privada."
+                        if reach else
+                        f"IA local configurada, pero no responde en {_local_url()}. "
+                        "¿Está Ollama en marcha?")}
+
+
+# --------------------------------------------------------------------------
+# Traducción
+# --------------------------------------------------------------------------
 
 def _proyectos_desc(projects: Sequence) -> str:
     filas = []
@@ -150,91 +223,128 @@ def _proyectos_desc(projects: Sequence) -> str:
     return "\n".join(filas) or "(no hay proyectos)"
 
 
-def interpretar(total, texto: str, projects: Sequence,
-                rules: Optional[dict] = None) -> dict:
-    """Traduce `texto` a la sintaxis canónica de reparto usando Claude.
-
-    Devuelve un dict: {ok, reparto, nota, error}. `reparto` es la cadena canónica
-    lista para pasar al motor determinista. Nunca lanza excepción: ante cualquier
-    fallo (sin clave, sin red, error de la API) devuelve ok=False con `error`.
-    """
-    if not available():
-        return {"ok": False, "reparto": "", "nota": "", "error": "IA no disponible."}
-    texto = (texto or "").strip()
-    if not texto:
-        return {"ok": False, "reparto": "", "nota": "", "error": "Texto vacío."}
-
-    try:
-        import anthropic
-    except Exception:
-        return {"ok": False, "reparto": "", "nota": "", "error": "Falta la librería 'anthropic'."}
-
-    model = os.environ.get("COSTCONTROL_AI_MODEL", _MODEL_DEFAULT)
+def _build_prompt(total, texto, projects, rules) -> str:
     reglas_txt = ""
     if rules:
         nombres = list(rules.keys()) if isinstance(rules, dict) else [r["nombre"] for r in rules]
         if nombres:
             reglas_txt = "\n\nReglas guardadas disponibles (por nombre):\n- " + "\n- ".join(nombres)
-
-    prompt = (
+    return (
         f"Importe total del documento: {total} €\n\n"
         f"Proyectos disponibles (usa estos CÓDIGOS):\n{_proyectos_desc(projects)}"
         f"{reglas_txt}\n\n"
-        f'Frase del usuario a traducir:\n"""{texto}"""'
+        f'Frase del usuario a traducir:\n\"\"\"{texto}\"\"\"'
     )
 
+
+def interpretar(total, texto: str, projects: Sequence,
+                rules: Optional[dict] = None) -> dict:
+    """Traduce `texto` a la sintaxis canónica de reparto usando IA.
+
+    Devuelve {ok, reparto, nota, error}. Nunca lanza excepción: ante cualquier
+    fallo devuelve ok=False con `error`.
+    """
+    prov = provider()
+    if not prov or _mode() == "off":
+        return {"ok": False, "reparto": "", "nota": "", "error": "IA no disponible."}
+    texto = (texto or "").strip()
+    if not texto:
+        return {"ok": False, "reparto": "", "nota": "", "error": "Texto vacío."}
+
+    prompt = _build_prompt(total, texto, projects, rules)
+    if prov == "local":
+        return _interpretar_local(prompt)
+    return _interpretar_anthropic(prompt)
+
+
+def _finalize(data: Optional[dict]) -> dict:
+    if data is None:
+        return {"ok": False, "reparto": "", "nota": "",
+                "error": "La IA no devolvió un resultado interpretable."}
+    entendido = bool(data.get("entendido"))
+    reparto = (data.get("reparto") or "").strip()
+    nota = (data.get("nota") or "").strip()
+    if not entendido or not reparto:
+        return {"ok": False, "reparto": "", "nota": nota,
+                "error": nota or "La IA no ha entendido el reparto."}
+    return {"ok": True, "reparto": reparto, "nota": nota, "error": ""}
+
+
+def _interpretar_anthropic(prompt: str) -> dict:
+    try:
+        import anthropic
+    except Exception:
+        return {"ok": False, "reparto": "", "nota": "", "error": "Falta la librería 'anthropic'."}
     try:
         client = anthropic.Anthropic(api_key=_key())
         msg = client.messages.create(
-            model=model,
+            model=_model(),
             max_tokens=400,
             system=_SYSTEM,
             messages=[{"role": "user", "content": prompt}],
             output_config={"format": {"type": "json_schema", "schema": _SCHEMA}},
         )
-        data = _extract_json(msg)
-        if data is None:
-            return {"ok": False, "reparto": "", "nota": "",
-                    "error": "La IA no devolvió un resultado interpretable."}
-        entendido = bool(data.get("entendido"))
-        reparto = (data.get("reparto") or "").strip()
-        nota = (data.get("nota") or "").strip()
-        if not entendido or not reparto:
-            return {"ok": False, "reparto": "", "nota": nota,
-                    "error": nota or "La IA no ha entendido el reparto."}
-        return {"ok": True, "reparto": reparto, "nota": nota, "error": ""}
+        return _finalize(_extract_json_anthropic(msg))
     except anthropic.AuthenticationError:
-        return {"ok": False, "reparto": "", "nota": "",
-                "error": "La clave de API no es válida."}
+        return {"ok": False, "reparto": "", "nota": "", "error": "La clave de API no es válida."}
     except anthropic.RateLimitError:
         return {"ok": False, "reparto": "", "nota": "",
                 "error": "Límite de uso de la API alcanzado; inténtalo más tarde."}
     except anthropic.APIConnectionError:
-        return {"ok": False, "reparto": "", "nota": "",
-                "error": "No hay conexión con la API (¿sin internet?)."}
-    except Exception as e:  # noqa: BLE001 — nunca debe tumbar la app
+        return {"ok": False, "reparto": "", "nota": "", "error": "No hay conexión con la API."}
+    except Exception as e:  # noqa: BLE001
         return {"ok": False, "reparto": "", "nota": "", "error": f"Error de IA: {e}"}
 
 
-def _extract_json(msg) -> Optional[dict]:
-    """Extrae el objeto JSON de la respuesta del modelo, sea cual sea la forma."""
-    # Salida estructurada nativa (si el SDK la expone ya parseada).
+def _interpretar_local(prompt: str) -> dict:
+    """Llama a un servidor local compatible con Ollama (/api/chat)."""
+    url = _local_url() + "/api/chat"
+    body = json.dumps({
+        "model": _model(),
+        "messages": [
+            {"role": "system", "content": _SYSTEM + "\n\n" + _JSON_HINT},
+            {"role": "user", "content": prompt},
+        ],
+        "stream": False,
+        "format": "json",
+        "options": {"temperature": 0},
+    }).encode("utf-8")
+    req = urllib.request.Request(url, data=body,
+                                 headers={"Content-Type": "application/json"})
+    # los servidores locales no pasan por el proxy: abrir sin proxy
+    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
+    try:
+        with opener.open(req, timeout=90) as resp:
+            payload = json.loads(resp.read().decode("utf-8"))
+    except urllib.error.URLError as e:
+        return {"ok": False, "reparto": "", "nota": "",
+                "error": f"No se pudo conectar con la IA local en {_local_url()} "
+                         f"(¿Ollama en marcha?). {e}"}
+    except Exception as e:  # noqa: BLE001
+        return {"ok": False, "reparto": "", "nota": "", "error": f"Error de IA local: {e}"}
+    content = (((payload or {}).get("message") or {}).get("content") or "").strip()
+    return _finalize(_parse_json_text(content))
+
+
+def _extract_json_anthropic(msg) -> Optional[dict]:
     parsed = getattr(msg, "parsed", None)
     if isinstance(parsed, dict):
         return parsed
-    # Texto: concatena bloques de tipo texto y parsea.
     fragments: List[str] = []
     for block in getattr(msg, "content", []) or []:
         txt = getattr(block, "text", None)
         if txt:
             fragments.append(txt)
-    raw = "".join(fragments).strip()
+    return _parse_json_text("".join(fragments))
+
+
+def _parse_json_text(raw: str) -> Optional[dict]:
+    raw = (raw or "").strip()
     if not raw:
         return None
     try:
         return json.loads(raw)
     except Exception:
-        # Rescata el primer objeto {...} si viniera envuelto en texto.
         i, j = raw.find("{"), raw.rfind("}")
         if 0 <= i < j:
             try:
