@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% import "_icons.html" as ico %}
 {% block title %}Panel · CostControl{% endblock %}
 {% block body %}
 <div class="actions" style="justify-content:space-between; align-items:flex-end">
@@ -18,23 +19,37 @@
   {% endif %}
 </div>
 
+{% set rep_pct = ((tot.total - tot.pendiente) / tot.total * 100) if tot.total else 0 %}
 <div class="grid kpi">
-  <div class="kpi-card accent">
-    <div class="label">Importe total</div>
+  <div class="kpi-card">
+    <div class="kpi-top"><span class="kpi-ic">{{ ico.icon('euro', 18) }}</span><span class="label">Importe total</span></div>
     <div class="value">{{ tot.total | eur }}</div>
+    {% if comp and comp.var is not none %}
+      <div class="kpi-sub {{ 'up' if comp.var>0 else 'down' }}">{{ '▲' if comp.var>0 else '▼' }} {{ '%+.1f'|format(comp.var) }}% vs {{ comp.ej_ant }}</div>
+    {% else %}<div class="kpi-sub">&nbsp;</div>{% endif %}
   </div>
   <div class="kpi-card">
-    <div class="label">Documentos</div>
+    <div class="kpi-top"><span class="kpi-ic">{{ ico.icon('doc', 18) }}</span><span class="label">Documentos</span></div>
     <div class="value">{{ tot.n_docs }}</div>
-  </div>
-  <div class="kpi-card warn">
-    <div class="label">Pendiente de repartir</div>
-    <div class="value">{{ tot.pendiente | eur }}</div>
+    <div class="kpi-sub">{{ tot.n_pendientes or 0 }} pendiente(s) de repartir</div>
   </div>
   <div class="kpi-card">
-    <div class="label">Docs. pendientes</div>
-    <div class="value">{{ tot.n_pendientes or 0 }}</div>
+    <div class="kpi-top"><span class="kpi-ic ok">{{ ico.icon('check', 18) }}</span><span class="label">Repartido</span></div>
+    <div class="value">{{ '%.0f'|format(rep_pct) }}%</div>
+    <div class="bar" style="margin-top:9px"><span style="width: {{ [rep_pct,100]|min }}%"></span></div>
   </div>
+  <div class="kpi-card">
+    <div class="kpi-top"><span class="kpi-ic warn">{{ ico.icon('clock', 18) }}</span><span class="label">Pendiente de repartir</span></div>
+    <div class="value">{{ tot.pendiente | eur }}</div>
+    <div class="kpi-sub">&nbsp;</div>
+  </div>
+</div>
+
+<div class="quick">
+  <a href="{{ url_for('importar') }}"><span class="qic">{{ ico.icon('importar', 20) }}</span><span class="qtx"><b>Importar Excel</b><span>Facturas, albaranes, apuntes</span></span></a>
+  <a href="{{ url_for('documento_editar') }}"><span class="qic">{{ ico.icon('plus', 20) }}</span><span class="qtx"><b>Nuevo documento</b><span>Alta manual</span></span></a>
+  <a href="{{ url_for('reparto_masivo') }}"><span class="qic">{{ ico.icon('split', 20) }}</span><span class="qtx"><b>Reparto masivo</b><span>Repartir varios a la vez</span></span></a>
+  <a href="{{ url_for('informe') }}"><span class="qic">{{ ico.icon('informe', 20) }}</span><span class="qtx"><b>Informe</b><span>Analítico y export</span></span></a>
 </div>
 
 {% if alertas and alertas.hay %}
