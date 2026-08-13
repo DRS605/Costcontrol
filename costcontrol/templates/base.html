@@ -50,6 +50,12 @@
       </nav>
 
       <div class="side-foot">
+        {% if multiuser and org_nombre %}
+        <div class="side-org" title="{{ org_nombre }}">
+          <span class="side-org-ic">{{ org_nombre[0]|upper }}</span>
+          <span class="side-org-tx"><b>{{ org_nombre }}</b>{% if usuario %}<i>{{ usuario.email }}</i>{% endif %}</span>
+        </div>
+        {% endif %}
         <a href="{{ url_for('ajustes') }}" class="nav-item {{ 'active' if ep.startswith('ajustes') }}">{{ ico.icon('ajustes') }}<span>Ajustes {% if ia_activa %}<span class="ia-dot" title="IA activa"></span>{% endif %}</span></a>
         {% if auth_activo %}<a href="{{ url_for('logout') }}" class="nav-item">{{ ico.icon('salir') }}<span>Salir</span></a>{% endif %}
         <span class="side-ver">CostControl v{{ version }}</span>

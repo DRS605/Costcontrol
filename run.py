@@ -12,12 +12,11 @@ import sys
 import threading
 import webbrowser
 
-from costcontrol import db
-from costcontrol.app import app
+from costcontrol.app import app, bootstrap
 
 
 def main():
-    db.init_db()
+    bootstrap()
     if "--demo" in sys.argv:
         from seed_demo import seed
         seed()

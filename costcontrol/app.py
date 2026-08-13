@@ -6,11 +6,11 @@ import json
 import os
 from decimal import Decimal
 
-from flask import (Flask, Response, abort, flash, redirect, render_template,
+from flask import (Flask, Response, abort, flash, g, redirect, render_template,
                    request, send_file, session, url_for)
 import io
 
-from . import ai, charts, db, importer
+from . import ai, auth, charts, db, importer
 from .allocation import Allocator, Project, money
 
 MESES = ["", "Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"]
@@ -21,6 +21,9 @@ app.secret_key = os.environ.get("COSTCONTROL_SECRET", "costcontrol-dev-secret")
 # Acceso opcional: si se define COSTCONTROL_PASSWORD, se exige contraseña.
 PASSWORD = os.environ.get("COSTCONTROL_PASSWORD", "").strip()
 
+# Multiusuario / multi-empresa: cada cliente en su propia base de datos aislada.
+MULTIUSER = auth.multiuser_activo()
+
 # Carpeta para adjuntos (facturas/albaranes en PDF o imagen).
 UPLOADS = os.environ.get(
     "COSTCONTROL_UPLOADS",
@@ -28,6 +31,15 @@ UPLOADS = os.environ.get(
 os.makedirs(UPLOADS, exist_ok=True)
 ADJUNTO_EXT = {".pdf", ".png", ".jpg", ".jpeg", ".gif", ".webp", ".tif", ".tiff", ".xlsx", ".xls", ".doc", ".docx"}
 app.config["MAX_CONTENT_LENGTH"] = 25 * 1024 * 1024  # 25 MB por subida
+
+
+def _uploads_dir():
+    """Carpeta de adjuntos, aislada por organización en modo multiusuario."""
+    d = UPLOADS
+    if MULTIUSER and getattr(g, "org_id", None):
+        d = os.path.join(UPLOADS, f"org_{g.org_id}")
+    os.makedirs(d, exist_ok=True)
+    return d
 
 
 def _guardar_adjunto(did, file):
@@ -41,12 +53,35 @@ def _guardar_adjunto(did, file):
         return None
     base = secure_filename(os.path.splitext(file.filename)[0])[:60] or "adjunto"
     stored = f"doc{did}_{uuid.uuid4().hex[:8]}_{base}{ext}"
-    file.save(os.path.join(UPLOADS, stored))
+    file.save(os.path.join(_uploads_dir(), stored))
     return stored
+
+
+_PUBLIC_ENDPOINTS = ("login", "logout", "registro", "static")
+_tenants_inicializados = set()
 
 
 @app.before_request
 def _gate():
+    if MULTIUSER:
+        if request.endpoint in _PUBLIC_ENDPOINTS:
+            return
+        uid = session.get("user_id")
+        if not uid:
+            return redirect(url_for("login", next=request.path))
+        # revalida el usuario y fija la base de datos de su organización
+        user = auth.get_usuario(uid)
+        if not user:
+            session.clear()
+            return redirect(url_for("login"))
+        g.user = user
+        g.org_id = user["org_id"]
+        g.db_path = auth.tenant_db_path(user["org_id"])
+        if g.org_id not in _tenants_inicializados:
+            db.init_db(g.db_path)
+            _tenants_inicializados.add(g.org_id)
+        return
+    # modo monousuario con contraseña opcional (comportamiento clásico)
     if not PASSWORD:
         return
     if request.endpoint in ("login", "static"):
@@ -58,6 +93,22 @@ def _gate():
 
 @app.route("/entrar", methods=["GET", "POST"])
 def login():
+    if MULTIUSER:
+        if session.get("user_id"):
+            return redirect(url_for("index"))
+        error = None
+        if request.method == "POST":
+            user = auth.autenticar(request.form.get("email", ""),
+                                   request.form.get("password", ""))
+            if user:
+                session.clear()
+                session["user_id"] = user["id"]
+                session["email"] = user["email"]
+                session["org_nombre"] = user["org_nombre"]
+                return redirect(request.args.get("next") or url_for("index"))
+            error = "Email o contraseña incorrectos."
+        return render_template("login.html", error=error, multiuser=True)
+
     if not PASSWORD:
         return redirect(url_for("index"))
     error = False
@@ -67,17 +118,46 @@ def login():
             destino = request.args.get("next") or url_for("index")
             return redirect(destino)
         error = True
-    return render_template("login.html", error=error)
+    return render_template("login.html", error=error, multiuser=False)
+
+
+@app.route("/registro", methods=["GET", "POST"])
+def registro():
+    if not MULTIUSER:
+        abort(404)
+    if session.get("user_id"):
+        return redirect(url_for("index"))
+    error = None
+    if request.method == "POST":
+        try:
+            r = auth.crear_organizacion(
+                request.form.get("empresa", ""),
+                request.form.get("email", ""),
+                request.form.get("password", ""),
+                request.form.get("nombre", ""))
+            u = auth.autenticar(request.form.get("email", ""),
+                                request.form.get("password", ""))
+            session.clear()
+            session["user_id"] = u["id"]
+            session["email"] = u["email"]
+            session["org_nombre"] = u["org_nombre"]
+            flash(f"¡Bienvenido a CostControl, {r['org_nombre']}!", "ok")
+            return redirect(url_for("index"))
+        except ValueError as e:
+            error = str(e)
+    return render_template("registro.html", error=error)
 
 
 @app.route("/salir")
 def logout():
-    session.pop("cc_auth", None)
+    session.clear()
     return redirect(url_for("login"))
 
 
 # --- utilidades -----------------------------------------------------------
 def get_conn():
+    if MULTIUSER:
+        return db.connect(getattr(g, "db_path", None))
     return db.connect()
 
 
@@ -153,13 +233,39 @@ def eur(value):
 @app.context_processor
 def inject_globals():
     return {"version": __import__("costcontrol").__version__,
-            "auth_activo": bool(PASSWORD),
+            "auth_activo": bool(PASSWORD) or MULTIUSER,
+            "multiuser": MULTIUSER,
+            "usuario": getattr(g, "user", None) if MULTIUSER else None,
+            "org_nombre": session.get("org_nombre") if MULTIUSER else None,
             "ia_activa": ai.available()}
 
 
 @app.route("/ajustes")
 def ajustes():
-    return render_template("ajustes.html", ia=ai.status())
+    equipo = None
+    if MULTIUSER and getattr(g, "org_id", None):
+        equipo = {"usuarios": auth.listar_usuarios(g.org_id),
+                  "es_admin": g.user.get("rol") == "admin",
+                  "yo": g.user["email"]}
+    return render_template("ajustes.html", ia=ai.status(), equipo=equipo)
+
+
+@app.route("/equipo/anadir", methods=["POST"])
+def equipo_anadir():
+    if not MULTIUSER:
+        abort(404)
+    if g.user.get("rol") != "admin":
+        flash("Solo un administrador puede añadir usuarios.", "error")
+        return redirect(url_for("ajustes"))
+    try:
+        auth.crear_usuario(g.org_id, request.form.get("email", ""),
+                           request.form.get("password", ""),
+                           request.form.get("nombre", ""),
+                           request.form.get("rol", "usuario"))
+        flash("Usuario añadido al equipo.", "ok")
+    except ValueError as e:
+        flash(str(e), "error")
+    return redirect(url_for("ajustes"))
 
 
 # --- panel ----------------------------------------------------------------
@@ -455,7 +561,7 @@ def documento_borrar(did):
 
 def _borrar_archivo(nombre):
     try:
-        p = os.path.join(UPLOADS, os.path.basename(nombre))
+        p = os.path.join(_uploads_dir(), os.path.basename(nombre))
         if os.path.isfile(p):
             os.remove(p)
     except OSError:
@@ -469,7 +575,7 @@ def documento_adjunto(did):
     conn.close()
     if not doc or not doc.get("adjunto"):
         abort(404)
-    return send_file(os.path.join(UPLOADS, os.path.basename(doc["adjunto"])),
+    return send_file(os.path.join(_uploads_dir(), os.path.basename(doc["adjunto"])),
                      download_name=doc["adjunto"], as_attachment=False)
 
 
@@ -961,11 +1067,19 @@ def cierres_cambiar():
     return redirect(url_for("presupuestos", ejercicio=ejercicio))
 
 
+def bootstrap():
+    """Prepara las bases de datos según el modo (mono o multiusuario)."""
+    if MULTIUSER:
+        auth.init_auth_db()
+    else:
+        db.init_db()
+
+
 def create_app():
-    db.init_db()
+    bootstrap()
     return app
 
 
 if __name__ == "__main__":
-    db.init_db()
+    bootstrap()
     app.run(debug=True, port=5000)

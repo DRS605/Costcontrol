@@ -38,12 +38,26 @@
     <div class="login-name">COST<span class="g">CONTROL</span></div>
     <div class="login-tag">CONTROLA · ANALIZA · OPTIMIZA</div>
     <form class="login" method="post">
-      {% if error %}<div class="login-err">Contraseña incorrecta.</div>{% endif %}
+      {% if error %}<div class="login-err">{{ error if error is string else 'Contraseña incorrecta.' }}</div>{% endif %}
+      {% if multiuser %}
+      <label>Email</label>
+      <input type="email" name="email" autofocus required placeholder="tu@empresa.com" autocomplete="username">
+      <label style="margin-top:12px">Contraseña</label>
+      <input type="password" name="password" required placeholder="••••••••" autocomplete="current-password">
+      <button class="login-btn" type="submit">Entrar</button>
+      {% else %}
       <label>Contraseña</label>
       <input type="password" name="password" autofocus required placeholder="••••••••">
       <button class="login-btn" type="submit">Entrar</button>
+      {% endif %}
     </form>
+    {% if multiuser %}
+    <div class="login-foot">¿Aún no tienes cuenta?
+      <a href="{{ url_for('registro') }}" style="color:var(--lime); font-weight:600">Crea tu empresa</a>
+    </div>
+    {% else %}
     <div class="login-foot">Control de costes por proyectos y estructuras de gasto</div>
+    {% endif %}
   </div>
 </body>
 </html>

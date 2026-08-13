@@ -19,10 +19,8 @@ os.environ.setdefault("COSTCONTROL_SECRET", "cambia-esto-por-una-frase-larga-y-s
 os.environ.setdefault("COSTCONTROL_PASSWORD", "")
 # -----------------------------------------------------------------------------
 
-from costcontrol import db  # noqa: E402
-db.init_db()
-
-from costcontrol.app import app as application  # noqa: E402
+from costcontrol.app import app as application, bootstrap  # noqa: E402
+bootstrap()
 
 if __name__ == "__main__":
     application.run()

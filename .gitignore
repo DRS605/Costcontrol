@@ -3,6 +3,7 @@ __pycache__/
 *.db
 costcontrol.db
 uploads/
+data/
 .venv/
 venv/
 env/

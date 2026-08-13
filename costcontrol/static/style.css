@@ -196,6 +196,11 @@ textarea { resize: vertical; min-height: 74px; }
 .iabox { background: linear-gradient(100deg,#f3fbe6,#eefbf4); border: 1px solid #cdeaa6; color: #2f5312; border-radius: var(--radius-sm); padding: 11px 14px; margin-top: 12px; font-size: 13.5px; }
 .iabox code { background: #fff; border: 1px solid #cfe6ad; color: #2f5312; padding: 1px 7px; border-radius: 6px; font-weight: 600; }
 .ia-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--lime); margin-left: 4px; vertical-align: middle; box-shadow: 0 0 0 2px rgba(143,220,31,.25); }
+.side-org { display: flex; align-items: center; gap: 9px; padding: 8px 10px; margin-bottom: 8px; background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.07); border-radius: 10px; }
+.side-org-ic { flex: 0 0 auto; width: 30px; height: 30px; border-radius: 8px; background: var(--lime); color: #101211; font-weight: 800; display: grid; place-items: center; font-size: 15px; }
+.side-org-tx { display: flex; flex-direction: column; min-width: 0; line-height: 1.25; }
+.side-org-tx b { color: #eef2ee; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.side-org-tx i { color: #8b948b; font-style: normal; font-size: 11.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 /* ---------- ayudas / pills ---------- */
 .tag-help { background: #f3f8ec; border: 1px solid #dcecc4; border-radius: var(--radius-sm); padding: 13px 15px; font-size: 13.5px; }

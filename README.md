@@ -80,6 +80,9 @@ herramienta traduce ese texto libre a líneas analíticas concretas.
 - 🚫 **Detección de duplicados** al importar (mismo número e importe).
 - 💾 **Copia de seguridad** completa en JSON, con **restauración**.
 - 🔒 **Acceso por contraseña opcional** con pantalla de login de marca.
+- 🏢 **Modo multiusuario / multi-empresa** (para vender como servicio): cada
+  cliente con su **cuenta**, su **equipo** de usuarios y su **base de datos
+  totalmente aislada**. Se activa con `COSTCONTROL_MULTIUSER=1`.
 
 ## Instalación y arranque
 
@@ -161,8 +164,11 @@ anterior.
 |----------|----------|
 | `COSTCONTROL_DB` | Ruta del archivo SQLite (por defecto `costcontrol.db`). |
 | `COSTCONTROL_UPLOADS` | Carpeta donde se guardan los adjuntos (por defecto `uploads/`). |
-| `COSTCONTROL_PASSWORD` | Si se define, exige contraseña para entrar (pantalla de login). Sin ella, acceso libre. |
+| `COSTCONTROL_PASSWORD` | (Modo monousuario) Si se define, exige contraseña para entrar. Sin ella, acceso libre. |
 | `COSTCONTROL_SECRET` | Clave de sesión de Flask (defínela en producción). |
+| `COSTCONTROL_MULTIUSER` | `1` para el modo **multiusuario / multi-empresa** (cuentas, equipos y datos aislados por cliente). |
+| `COSTCONTROL_DATA_DIR` | (Multiusuario) Carpeta donde se guardan la BBDD de control y las de cada empresa (por defecto `data/`). |
+| `COSTCONTROL_AUTH_DB` | (Multiusuario) Ruta del SQLite de cuentas/organizaciones (por defecto `data/costcontrol_auth.db`). |
 | `COSTCONTROL_AI_PROVIDER` | `local` (IA gratis y privada con Ollama), `anthropic` (Claude, de pago), `auto` (por defecto) u `off`. |
 | `COSTCONTROL_AI_MODE` | `auto` (usa la IA solo si el motor local no entiende la frase), `siempre` u `off`. |
 | `COSTCONTROL_AI_MODEL` | Modelo a usar (por defecto `llama3.2` en local, `claude-haiku-4-5` en Anthropic). |
@@ -207,11 +213,30 @@ más calidad puedes subir a `COSTCONTROL_AI_MODEL=claude-sonnet-4-6` (≈ 3× co
 siendo trivial). A gran escala (cientos de clientes) puedes autohospedar el proveedor
 `local` en tu servidor y dejar el coste por reparto en cero.
 
+## Multiusuario / multi-empresa (vender como servicio)
+
+Para ofrecer CostControl como servicio a varios clientes, arranca con
+`COSTCONTROL_MULTIUSER=1`. Entonces:
+
+- Aparece una pantalla de **registro** (crear empresa) y de **login** por
+  email y contraseña (con hash seguro).
+- Cada empresa (organización) tiene su **propia base de datos SQLite aislada**
+  (`data/tenant_<id>.db`). Es **imposible** que un cliente vea datos de otro:
+  no comparten fichero. Los adjuntos también se guardan por empresa.
+- Cada empresa gestiona su **equipo** de usuarios desde *Ajustes* (el
+  administrador añade colegas con rol `usuario` o `admin`).
+- Copiar o dar de baja a un cliente es mover/borrar **un único archivo**.
+
+La IA se configura **una sola vez en el servidor** (ver *Como producto (SaaS)*),
+así que tus clientes no configuran nada. Publica con HTTPS (ver `DEPLOY.md`) y
+haz copias de `data/` periódicamente.
+
 ## Pruebas
 
 ```bash
 python tests/test_allocation.py   # motor de reparto
 python tests/test_app.py          # app completa (rutas, Excel, reparto)
+python tests/test_multiuser.py    # multi-empresa: aislamiento y accesos
 ```
 
 ## Tecnología
