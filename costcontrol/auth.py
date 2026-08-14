@@ -72,9 +72,11 @@ CREATE INDEX IF NOT EXISTS idx_usuarios_org ON usuarios(org_id);
 
 
 def connect_auth() -> sqlite3.Connection:
-    conn = sqlite3.connect(_auth_db_path())
+    conn = sqlite3.connect(_auth_db_path(), timeout=15)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
+    conn.execute("PRAGMA journal_mode = WAL")
+    conn.execute("PRAGMA busy_timeout = 15000")
     return conn
 
 

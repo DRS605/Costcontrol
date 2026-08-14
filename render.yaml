@@ -1,0 +1,43 @@
+# Blueprint de Render para CostControl como servicio (multi-empresa).
+#
+# IMPORTANTE: CostControl guarda los datos en ficheros SQLite, así que necesita
+# un DISCO PERSISTENTE y UN SOLO servicio (no escala a varias instancias). Para
+# un SaaS pequeño/mediano es suficiente; escala en vertical (más CPU/RAM).
+#
+# Tras crear el Blueprint, define en el panel las variables marcadas como
+# "sync: false" (la clave de IA), y listo.
+
+services:
+  - type: web
+    name: costcontrol
+    runtime: python
+    plan: starter                 # el plan con disco persistente (de pago)
+    buildCommand: "pip install -r requirements.txt && pip install anthropic"
+    startCommand: "gunicorn -c gunicorn.conf.py wsgi:application"
+    healthCheckPath: /salud
+    autoDeploy: true
+    disk:
+      name: datos
+      mountPath: /var/data        # aquí viven las BBDD de cada empresa
+      sizeGB: 5
+    envVars:
+      - key: COSTCONTROL_MULTIUSER
+        value: "1"
+      - key: COSTCONTROL_SECURE
+        value: "1"                # HTTPS/proxy + cookies seguras
+      - key: COSTCONTROL_DATA_DIR
+        value: /var/data
+      - key: COSTCONTROL_UPLOADS
+        value: /var/data/uploads
+      - key: COSTCONTROL_SECRET
+        generateValue: true       # Render genera una clave larga y secreta
+      - key: COSTCONTROL_AI_MODE
+        value: auto
+      - key: COSTCONTROL_AI_MODEL
+        value: claude-haiku-4-5
+      - key: ANTHROPIC_API_KEY
+        sync: false               # <-- pon tu clave en el panel de Render
+      - key: WEB_CONCURRENCY
+        value: "3"
+      - key: PYTHON_VERSION
+        value: "3.11.9"

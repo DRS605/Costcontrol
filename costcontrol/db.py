@@ -117,9 +117,14 @@ CREATE TABLE IF NOT EXISTS cierres (
 
 
 def connect(path: Optional[str] = None) -> sqlite3.Connection:
-    conn = sqlite3.connect(path or DEFAULT_DB)
+    conn = sqlite3.connect(path or DEFAULT_DB, timeout=15)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
+    # Producción: WAL permite lecturas concurrentes con una escritura, y
+    # busy_timeout evita errores "database is locked" bajo varios workers.
+    conn.execute("PRAGMA journal_mode = WAL")
+    conn.execute("PRAGMA busy_timeout = 15000")
+    conn.execute("PRAGMA synchronous = NORMAL")
     return conn
 
 

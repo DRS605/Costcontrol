@@ -24,6 +24,27 @@ PASSWORD = os.environ.get("COSTCONTROL_PASSWORD", "").strip()
 # Multiusuario / multi-empresa: cada cliente en su propia base de datos aislada.
 MULTIUSER = auth.multiuser_activo()
 
+
+def _truthy(name):
+    return (os.environ.get(name) or "").strip().lower() in ("1", "true", "si", "sí", "yes", "on")
+
+
+# Endurecimiento para producción (detrás de HTTPS/proxy): COSTCONTROL_SECURE=1
+SECURE = _truthy("COSTCONTROL_SECURE")
+if SECURE:
+    from werkzeug.middleware.proxy_fix import ProxyFix
+    # Confía en las cabeceras del proxy (Render/nginx) para HTTPS y la IP real.
+    app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
+    app.config.update(
+        SESSION_COOKIE_SECURE=True,
+        SESSION_COOKIE_HTTPONLY=True,
+        SESSION_COOKIE_SAMESITE="Lax",
+        PREFERRED_URL_SCHEME="https",
+    )
+    if app.secret_key == "costcontrol-dev-secret":
+        import warnings
+        warnings.warn("COSTCONTROL_SECRET no está definido: define una clave larga y secreta en producción.")
+
 # Carpeta para adjuntos (facturas/albaranes en PDF o imagen).
 UPLOADS = os.environ.get(
     "COSTCONTROL_UPLOADS",
@@ -57,8 +78,15 @@ def _guardar_adjunto(did, file):
     return stored
 
 
-_PUBLIC_ENDPOINTS = ("login", "logout", "registro", "static")
+_PUBLIC_ENDPOINTS = ("login", "logout", "registro", "static", "salud")
 _tenants_inicializados = set()
+
+
+@app.route("/salud")
+def salud():
+    """Comprobación de salud para el hosting (sin autenticación)."""
+    return {"ok": True, "version": __import__("costcontrol").__version__,
+            "multiusuario": MULTIUSER}
 
 
 @app.before_request
@@ -84,7 +112,7 @@ def _gate():
     # modo monousuario con contraseña opcional (comportamiento clásico)
     if not PASSWORD:
         return
-    if request.endpoint in ("login", "static"):
+    if request.endpoint in ("login", "static", "salud"):
         return
     if session.get("cc_auth"):
         return
