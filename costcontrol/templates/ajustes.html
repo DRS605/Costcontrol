@@ -79,6 +79,16 @@
 
 {% if equipo %}
 <div class="card">
+  <h2>Mi cuenta</h2>
+  <p class="small muted" style="margin-top:6px">Cambia tu contraseña de acceso.</p>
+  <form method="post" action="{{ url_for('cuenta_password') }}" class="inline-form" style="flex-wrap:wrap; gap:10px">
+    <div><label>Contraseña actual</label><input type="password" name="actual" required autocomplete="current-password"></div>
+    <div><label>Nueva contraseña</label><input type="password" name="nueva" required placeholder="mín. 6" autocomplete="new-password"></div>
+    <div style="align-self:flex-end"><button class="btn sec">Cambiar contraseña</button></div>
+  </form>
+</div>
+
+<div class="card">
   <div class="actions" style="justify-content:space-between; align-items:center">
     <h2 style="margin:0">Equipo</h2>
     <span class="small muted">{{ equipo.usuarios|length }} usuario(s)</span>
@@ -86,14 +96,28 @@
   <p class="small muted" style="margin-top:6px">Personas de tu empresa con acceso a estos datos. Cada una entra con su email y contraseña.</p>
   <div class="table-wrap">
   <table>
-    <thead><tr><th>Email</th><th>Nombre</th><th>Rol</th><th>Último acceso</th></tr></thead>
+    <thead><tr><th>Email</th><th>Nombre</th><th>Rol</th><th>Último acceso</th>{% if equipo.es_admin %}<th>Acciones</th>{% endif %}</tr></thead>
     <tbody>
     {% for u in equipo.usuarios %}
       <tr>
-        <td><b>{{ u.email }}</b>{% if u.email == equipo.yo %} <span class="badge b-ok">tú</span>{% endif %}</td>
+        <td><b>{{ u.email }}</b>{% if u.email == equipo.yo %} <span class="badge b-ok">tú</span>{% endif %}{% if not u.activo %} <span class="badge b-excedido">inactivo</span>{% endif %}</td>
         <td class="small">{{ u.nombre or '—' }}</td>
         <td><span class="badge {{ 'beneficio' if u.rol=='admin' else 'coste' }}">{{ u.rol }}</span></td>
         <td class="small muted">{{ u.ultimo_acceso or '—' }}</td>
+        {% if equipo.es_admin %}
+        <td class="actions">
+          {% if u.email != equipo.yo %}
+          <form method="post" action="{{ url_for('equipo_reset', uid=u.id) }}" class="inline-form" style="gap:6px" onsubmit="return this.password.value.length>=6">
+            <input type="password" name="password" placeholder="nueva contraseña" style="width:150px" required>
+            <button class="btn sec sm" title="Fijar nueva contraseña a este usuario">Resetear</button>
+          </form>
+          <form method="post" action="{{ url_for('equipo_estado', uid=u.id) }}" style="display:inline">
+            <input type="hidden" name="activo" value="{{ '0' if u.activo else '1' }}">
+            <button class="btn sec sm">{{ 'Desactivar' if u.activo else 'Activar' }}</button>
+          </form>
+          {% else %}<span class="small muted">—</span>{% endif %}
+        </td>
+        {% endif %}
       </tr>
     {% endfor %}
     </tbody>

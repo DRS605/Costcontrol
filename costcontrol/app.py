@@ -78,7 +78,9 @@ def _guardar_adjunto(did, file):
     return stored
 
 
-_PUBLIC_ENDPOINTS = ("login", "logout", "registro", "static", "salud")
+_PUBLIC_ENDPOINTS = ("login", "logout", "registro", "static", "salud",
+                     "recuperar", "restablecer",
+                     "privacidad", "condiciones", "aviso_legal")
 _tenants_inicializados = set()
 
 
@@ -87,6 +89,32 @@ def salud():
     """Comprobación de salud para el hosting (sin autenticación)."""
     return {"ok": True, "version": __import__("costcontrol").__version__,
             "multiusuario": MULTIUSER}
+
+
+def _legal_ctx():
+    """Datos de la empresa que presta el servicio (para las páginas legales)."""
+    return {
+        "empresa": os.environ.get("COSTCONTROL_EMPRESA", "[NOMBRE DE TU EMPRESA]"),
+        "cif": os.environ.get("COSTCONTROL_CIF", "[CIF/NIF]"),
+        "domicilio": os.environ.get("COSTCONTROL_DOMICILIO", "[DOMICILIO]"),
+        "email": os.environ.get("COSTCONTROL_EMAIL_CONTACTO", "[EMAIL DE CONTACTO]"),
+        "dominio": os.environ.get("COSTCONTROL_DOMINIO", "[tu-dominio.com]"),
+    }
+
+
+@app.route("/privacidad")
+def privacidad():
+    return render_template("legal_privacidad.html", **_legal_ctx())
+
+
+@app.route("/condiciones")
+def condiciones():
+    return render_template("legal_condiciones.html", **_legal_ctx())
+
+
+@app.route("/aviso-legal")
+def aviso_legal():
+    return render_template("legal_aviso.html", **_legal_ctx())
 
 
 @app.before_request
@@ -112,7 +140,8 @@ def _gate():
     # modo monousuario con contraseña opcional (comportamiento clásico)
     if not PASSWORD:
         return
-    if request.endpoint in ("login", "static", "salud"):
+    if request.endpoint in ("login", "static", "salud",
+                            "privacidad", "condiciones", "aviso_legal"):
         return
     if session.get("cc_auth"):
         return
@@ -174,6 +203,96 @@ def registro():
         except ValueError as e:
             error = str(e)
     return render_template("registro.html", error=error)
+
+
+@app.route("/recuperar", methods=["GET", "POST"])
+def recuperar():
+    """Solicitar restablecimiento de contraseña (sin revelar si el email existe)."""
+    if not MULTIUSER:
+        abort(404)
+    enviado = False
+    link_directo = None
+    if request.method == "POST":
+        email = request.form.get("email", "")
+        token = auth.crear_token_reset(email)
+        if token:
+            url = url_for("restablecer", token=token, _external=True)
+            cuerpo = (f"Has solicitado restablecer tu contraseña de CostControl.\n\n"
+                      f"Abre este enlace (caduca en 2 horas):\n{url}\n\n"
+                      f"Si no has sido tú, ignora este mensaje.")
+            if not auth.enviar_email(email, "Restablecer tu contraseña · CostControl", cuerpo):
+                # Sin SMTP: no podemos enviar el correo. El operador puede dar el
+                # enlace desde la consola; aquí no se muestra por seguridad.
+                app.logger.info("Reset solicitado para %s (sin SMTP). Enlace: %s", email, url)
+        enviado = True
+    return render_template("recuperar.html", enviado=enviado,
+                           hay_email=auth.smtp_configurado(), link_directo=link_directo)
+
+
+@app.route("/restablecer/<token>", methods=["GET", "POST"])
+def restablecer(token):
+    if not MULTIUSER:
+        abort(404)
+    datos = auth.usuario_por_token(token)
+    if not datos:
+        return render_template("restablecer.html", valido=False)
+    error = None
+    if request.method == "POST":
+        nueva = request.form.get("password", "")
+        if nueva != request.form.get("password2", ""):
+            error = "Las contraseñas no coinciden."
+        elif auth.consumir_token_reset(token, nueva):
+            flash("Contraseña actualizada. Ya puedes entrar.", "ok")
+            return redirect(url_for("login"))
+        else:
+            error = "El enlace ha caducado o no es válido."
+    return render_template("restablecer.html", valido=True, email=datos["email"], error=error)
+
+
+@app.route("/cuenta/password", methods=["POST"])
+def cuenta_password():
+    if not MULTIUSER:
+        abort(404)
+    try:
+        auth.cambiar_password(g.user["id"], request.form.get("actual", ""),
+                              request.form.get("nueva", ""))
+        flash("Contraseña cambiada correctamente.", "ok")
+    except ValueError as e:
+        flash(str(e), "error")
+    return redirect(url_for("ajustes"))
+
+
+@app.route("/equipo/<int:uid>/reset", methods=["POST"])
+def equipo_reset(uid):
+    if not MULTIUSER:
+        abort(404)
+    if g.user.get("rol") != "admin":
+        flash("Solo un administrador puede hacer esto.", "error")
+        return redirect(url_for("ajustes"))
+    try:
+        auth.admin_reset_password(g.org_id, uid, request.form.get("password", ""))
+        flash("Contraseña del usuario actualizada.", "ok")
+    except ValueError as e:
+        flash(str(e), "error")
+    return redirect(url_for("ajustes"))
+
+
+@app.route("/equipo/<int:uid>/estado", methods=["POST"])
+def equipo_estado(uid):
+    if not MULTIUSER:
+        abort(404)
+    if g.user.get("rol") != "admin":
+        flash("Solo un administrador puede hacer esto.", "error")
+        return redirect(url_for("ajustes"))
+    if uid == g.user["id"]:
+        flash("No puedes desactivar tu propia cuenta.", "error")
+        return redirect(url_for("ajustes"))
+    try:
+        auth.set_activo(g.org_id, uid, request.form.get("activo") == "1")
+        flash("Estado del usuario actualizado.", "ok")
+    except ValueError as e:
+        flash(str(e), "error")
+    return redirect(url_for("ajustes"))
 
 
 @app.route("/salir")

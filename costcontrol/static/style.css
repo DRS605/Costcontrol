@@ -254,6 +254,9 @@ code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
 /* pie */
 footer { text-align: center; color: var(--muted); padding: 28px 0 4px; }
 .foot-tag { color: var(--lime-ink); letter-spacing: 2.5px; font-size: 10.5px; font-weight: 700; }
+.foot-legal { display: block; margin-top: 8px; font-size: 12px; }
+.foot-legal a { color: var(--muted); text-decoration: none; }
+.foot-legal a:hover { color: var(--lime-ink); text-decoration: underline; }
 
 /* ---------- microinteracciones ---------- */
 @media (prefers-reduced-motion: no-preference){

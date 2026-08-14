@@ -45,6 +45,9 @@
       <label style="margin-top:12px">Contraseña</label>
       <input type="password" name="password" required placeholder="••••••••" autocomplete="current-password">
       <button class="login-btn" type="submit">Entrar</button>
+      <div style="text-align:right; margin-top:10px">
+        <a href="{{ url_for('recuperar') }}" style="color:#8b948b; font-size:12.5px">¿Olvidaste tu contraseña?</a>
+      </div>
       {% else %}
       <label>Contraseña</label>
       <input type="password" name="password" autofocus required placeholder="••••••••">
@@ -54,6 +57,10 @@
     {% if multiuser %}
     <div class="login-foot">¿Aún no tienes cuenta?
       <a href="{{ url_for('registro') }}" style="color:var(--lime); font-weight:600">Crea tu empresa</a>
+    </div>
+    <div class="login-foot" style="margin-top:10px">
+      <a href="{{ url_for('privacidad') }}" style="color:#4c534c">Privacidad</a> ·
+      <a href="{{ url_for('condiciones') }}" style="color:#4c534c">Condiciones</a>
     </div>
     {% else %}
     <div class="login-foot">Control de costes por proyectos y estructuras de gasto</div>

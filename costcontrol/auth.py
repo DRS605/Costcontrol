@@ -68,6 +68,13 @@ CREATE TABLE IF NOT EXISTS usuarios (
     ultimo_acceso TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_usuarios_org ON usuarios(org_id);
+CREATE TABLE IF NOT EXISTS password_resets (
+    token TEXT PRIMARY KEY,
+    user_id INTEGER NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
+    creado TEXT DEFAULT (datetime('now')),
+    expira TEXT NOT NULL,
+    usado INTEGER NOT NULL DEFAULT 0
+);
 """
 
 
@@ -214,5 +221,150 @@ def listar_usuarios(org_id: int) -> list:
             "SELECT id, email, nombre, rol, activo, creado, ultimo_acceso "
             "FROM usuarios WHERE org_id=? ORDER BY creado", (int(org_id),)).fetchall()
         return [dict(r) for r in rows]
+    finally:
+        conn.close()
+
+
+# --------------------------------------------------------------------------
+# Contraseñas
+# --------------------------------------------------------------------------
+
+def _validar_password(nueva: str) -> None:
+    if len(nueva or "") < 6:
+        raise ValueError("La contraseña debe tener al menos 6 caracteres.")
+
+
+def cambiar_password(user_id: int, actual: str, nueva: str) -> None:
+    """Cambia la contraseña del propio usuario (verificando la actual)."""
+    _validar_password(nueva)
+    conn = connect_auth()
+    try:
+        u = conn.execute("SELECT password_hash FROM usuarios WHERE id=?", (int(user_id),)).fetchone()
+        if not u or not check_password_hash(u["password_hash"], actual or ""):
+            raise ValueError("La contraseña actual no es correcta.")
+        with conn:
+            conn.execute("UPDATE usuarios SET password_hash=? WHERE id=?",
+                         (generate_password_hash(nueva), int(user_id)))
+    finally:
+        conn.close()
+
+
+def admin_reset_password(org_id: int, user_id: int, nueva: str) -> None:
+    """Un administrador fija una nueva contraseña a un usuario de SU organización."""
+    _validar_password(nueva)
+    conn = connect_auth()
+    try:
+        u = conn.execute("SELECT org_id FROM usuarios WHERE id=?", (int(user_id),)).fetchone()
+        if not u or u["org_id"] != int(org_id):
+            raise ValueError("Ese usuario no pertenece a tu empresa.")
+        with conn:
+            conn.execute("UPDATE usuarios SET password_hash=? WHERE id=?",
+                         (generate_password_hash(nueva), int(user_id)))
+    finally:
+        conn.close()
+
+
+def set_activo(org_id: int, user_id: int, activo: bool) -> None:
+    """Activa o desactiva el acceso de un usuario de la organización."""
+    conn = connect_auth()
+    try:
+        u = conn.execute("SELECT org_id FROM usuarios WHERE id=?", (int(user_id),)).fetchone()
+        if not u or u["org_id"] != int(org_id):
+            raise ValueError("Ese usuario no pertenece a tu empresa.")
+        with conn:
+            conn.execute("UPDATE usuarios SET activo=? WHERE id=?",
+                         (1 if activo else 0, int(user_id)))
+    finally:
+        conn.close()
+
+
+def crear_token_reset(email: str, horas: int = 2) -> Optional[str]:
+    """Crea un token de restablecimiento para el email. None si no existe
+    (sin revelar si el email está o no registrado)."""
+    import datetime
+    import secrets
+    email = _email_norm(email)
+    conn = connect_auth()
+    try:
+        u = conn.execute("SELECT id, activo FROM usuarios WHERE email=?", (email,)).fetchone()
+        if not u or not u["activo"]:
+            return None
+        token = secrets.token_urlsafe(32)
+        expira = (datetime.datetime.utcnow() + datetime.timedelta(hours=horas)).strftime("%Y-%m-%d %H:%M:%S")
+        with conn:
+            conn.execute("INSERT INTO password_resets (token, user_id, expira) VALUES (?,?,?)",
+                         (token, u["id"], expira))
+        return token
+    finally:
+        conn.close()
+
+
+def usuario_por_token(token: str) -> Optional[dict]:
+    """Devuelve el usuario si el token es válido (no usado y no caducado)."""
+    conn = connect_auth()
+    try:
+        r = conn.execute(
+            "SELECT pr.user_id, u.email FROM password_resets pr "
+            "JOIN usuarios u ON u.id=pr.user_id "
+            "WHERE pr.token=? AND pr.usado=0 AND pr.expira > datetime('now')",
+            (token or "",)).fetchone()
+        return {"user_id": r["user_id"], "email": r["email"]} if r else None
+    finally:
+        conn.close()
+
+
+def smtp_configurado() -> bool:
+    return bool((os.environ.get("COSTCONTROL_SMTP_HOST") or "").strip())
+
+
+def enviar_email(destino: str, asunto: str, cuerpo: str) -> bool:
+    """Envía un email si hay SMTP configurado. Devuelve False si no puede.
+
+    Config (opcional): COSTCONTROL_SMTP_HOST, _PORT, _USER, _PASSWORD, _FROM,
+    _TLS (por defecto 1).
+    """
+    host = (os.environ.get("COSTCONTROL_SMTP_HOST") or "").strip()
+    if not host:
+        return False
+    import smtplib
+    from email.message import EmailMessage
+    port = int(os.environ.get("COSTCONTROL_SMTP_PORT", "587"))
+    user = os.environ.get("COSTCONTROL_SMTP_USER", "")
+    pwd = os.environ.get("COSTCONTROL_SMTP_PASSWORD", "")
+    remitente = os.environ.get("COSTCONTROL_SMTP_FROM") or user or "no-reply@costcontrol"
+    usar_tls = (os.environ.get("COSTCONTROL_SMTP_TLS", "1")).strip().lower() in ("1", "true", "si", "yes", "on")
+    try:
+        msg = EmailMessage()
+        msg["Subject"] = asunto
+        msg["From"] = remitente
+        msg["To"] = destino
+        msg.set_content(cuerpo)
+        with smtplib.SMTP(host, port, timeout=15) as s:
+            if usar_tls:
+                s.starttls()
+            if user:
+                s.login(user, pwd)
+            s.send_message(msg)
+        return True
+    except Exception:
+        return False
+
+
+def consumir_token_reset(token: str, nueva: str) -> bool:
+    """Fija la nueva contraseña usando un token válido y lo marca como usado."""
+    _validar_password(nueva)
+    conn = connect_auth()
+    try:
+        r = conn.execute(
+            "SELECT user_id FROM password_resets "
+            "WHERE token=? AND usado=0 AND expira > datetime('now')",
+            (token or "",)).fetchone()
+        if not r:
+            return False
+        with conn:
+            conn.execute("UPDATE usuarios SET password_hash=? WHERE id=?",
+                         (generate_password_hash(nueva), r["user_id"]))
+            conn.execute("UPDATE password_resets SET usado=1 WHERE token=?", (token,))
+        return True
     finally:
         conn.close()

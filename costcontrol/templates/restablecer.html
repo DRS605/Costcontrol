@@ -3,16 +3,16 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Crear cuenta · CostControl</title>
+  <title>Nueva contraseña · CostControl</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 120 120'><rect width='120' height='120' rx='26' fill='%23101211'/><path d='M 97.7 33.6 A 46 46 0 1 0 97.7 86.4' fill='none' stroke='white' stroke-width='13' stroke-linecap='round'/><path d='M 79.1 40.9 A 27 27 0 1 0 79.1 79.1' fill='none' stroke='%238fdc1f' stroke-width='13' stroke-linecap='round'/></svg>">
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
   <style>
     body { background:#0b0c0b; display:grid; place-items:center; min-height:100vh; }
-    .login-wrap { text-align:center; padding:24px; width:100%; max-width:420px; }
+    .login-wrap { text-align:center; padding:24px; width:100%; max-width:400px; }
     .login-mark { width:104px; height:104px; margin:0 auto 4px; display:block; }
     .login-name { font-size:30px; font-weight:800; letter-spacing:2px; color:#fff; }
     .login-name .g { color:var(--lime); }
-    .login-tag { color:#8b948b; letter-spacing:1px; font-size:13px; margin:8px 0 22px; }
+    .login-tag { color:#8b948b; font-size:13px; margin:8px 0 22px; }
     form.login { background:#151715; border:1px solid #262a26; border-radius:14px; padding:22px; text-align:left; }
     form.login label { color:#9aa39a; }
     form.login input { background:#0e100e; border-color:#2b302b; color:#fff; }
@@ -23,8 +23,6 @@
     .login-err { background:#2a1414; border:1px solid #5a2020; color:#ff8f8a;
       border-radius:8px; padding:9px; font-size:13.5px; margin-bottom:14px; }
     .login-foot { color:#6a726a; font-size:12.5px; margin-top:18px; }
-    .fld { margin-top:12px; }
-    .fld:first-child { margin-top:0; }
   </style>
 </head>
 <body>
@@ -34,28 +32,22 @@
       <path d="M 79.1 40.9 A 27 27 0 1 0 79.1 79.1" fill="none" stroke="#8fdc1f" stroke-width="13" stroke-linecap="round"/>
     </svg>
     <div class="login-name">COST<span class="g">CONTROL</span></div>
-    <div class="login-tag">Crea la cuenta de tu empresa</div>
-    <form class="login" method="post">
-      {% if error %}<div class="login-err">{{ error }}</div>{% endif %}
-      <div class="fld"><label>Empresa</label>
-        <input name="empresa" required placeholder="Mi Empresa S.L." value="{{ request.form.empresa or '' }}"></div>
-      <div class="fld"><label>Tu nombre</label>
-        <input name="nombre" placeholder="Nombre y apellidos" value="{{ request.form.nombre or '' }}"></div>
-      <div class="fld"><label>Email</label>
-        <input type="email" name="email" required placeholder="tu@empresa.com" value="{{ request.form.email or '' }}" autocomplete="username"></div>
-      <div class="fld"><label>Contraseña</label>
-        <input type="password" name="password" required placeholder="mínimo 6 caracteres" autocomplete="new-password"></div>
-      <label class="fld" style="display:flex; align-items:flex-start; gap:8px; color:#9aa39a; font-size:12.5px; cursor:pointer">
-        <input type="checkbox" name="acepto" required style="width:auto; margin-top:2px">
-        <span>He leído y acepto las
-          <a href="{{ url_for('condiciones') }}" target="_blank" style="color:var(--lime)">condiciones</a> y la
-          <a href="{{ url_for('privacidad') }}" target="_blank" style="color:var(--lime)">política de privacidad</a>.</span>
-      </label>
-      <button class="login-btn" type="submit">Crear empresa y entrar</button>
-    </form>
-    <div class="login-foot">¿Ya tienes cuenta?
-      <a href="{{ url_for('login') }}" style="color:var(--lime); font-weight:600">Inicia sesión</a>
-    </div>
+    {% if not valido %}
+      <div class="login-tag">Enlace no válido</div>
+      <form class="login"><p style="color:#c9d0c9; margin:0">El enlace ha caducado o ya se ha usado. Solicita uno nuevo.</p></form>
+      <div class="login-foot"><a href="{{ url_for('recuperar') }}" style="color:var(--lime); font-weight:600">Pedir un enlace nuevo</a></div>
+    {% else %}
+      <div class="login-tag">Elige una nueva contraseña para {{ email }}</div>
+      <form class="login" method="post">
+        {% if error %}<div class="login-err">{{ error }}</div>{% endif %}
+        <label>Nueva contraseña</label>
+        <input type="password" name="password" required autofocus placeholder="mínimo 6 caracteres" autocomplete="new-password">
+        <label style="margin-top:12px">Repite la contraseña</label>
+        <input type="password" name="password2" required placeholder="repite" autocomplete="new-password">
+        <button class="login-btn" type="submit">Guardar y entrar</button>
+      </form>
+      <div class="login-foot"><a href="{{ url_for('login') }}" style="color:var(--lime); font-weight:600">Volver a iniciar sesión</a></div>
+    {% endif %}
   </div>
 </body>
 </html>

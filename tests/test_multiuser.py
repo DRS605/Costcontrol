@@ -100,6 +100,46 @@ def run():
     ok += 1
     print("  ok  login/logout con email y contraseña")
 
+    # cambiar la propia contraseña (logueado)
+    ca.post("/cuenta/password", data={"actual": "secreto123", "nueva": "nueva12345"},
+            follow_redirects=True)
+    assert auth.autenticar("a@a.com", "nueva12345") is not None
+    assert auth.autenticar("a@a.com", "secreto123") is None
+    ok += 1
+    print("  ok  cambio de contraseña propia")
+
+    # el admin de A añade un usuario y le resetea la contraseña
+    auth.crear_usuario(orgs[0], "colega@a.com", "inicial123", "Colega", "usuario")
+    uid = [u["id"] for u in auth.listar_usuarios(orgs[0]) if u["email"] == "colega@a.com"][0]
+    ca.post(f"/equipo/{uid}/reset", data={"password": "reseteada9"}, follow_redirects=True)
+    assert auth.autenticar("colega@a.com", "reseteada9") is not None
+    ok += 1
+    print("  ok  el admin resetea la contraseña de su equipo")
+
+    # el admin desactiva al colega -> no puede entrar
+    ca.post(f"/equipo/{uid}/estado", data={"activo": "0"}, follow_redirects=True)
+    assert auth.autenticar("colega@a.com", "reseteada9") is None
+    ok += 1
+    print("  ok  activar/desactivar usuario")
+
+    # recuperación por token (sin depender del email)
+    token = auth.crear_token_reset("a@a.com")
+    assert token and auth.usuario_por_token(token)
+    assert auth.crear_token_reset("noexiste@x.com") is None      # sin enumeración
+    r = app.test_client().post(f"/restablecer/{token}",
+                               data={"password": "portoken12", "password2": "portoken12"},
+                               follow_redirects=True)
+    assert auth.autenticar("a@a.com", "portoken12") is not None
+    assert auth.usuario_por_token(token) is None                 # token de un solo uso
+    ok += 1
+    print("  ok  recuperación de contraseña por token")
+
+    # páginas legales accesibles sin login
+    for url in ("/privacidad", "/condiciones", "/aviso-legal", "/recuperar"):
+        assert app.test_client().get(url).status_code == 200
+    ok += 1
+    print("  ok  páginas legales y de recuperación públicas")
+
     print(f"\nTODO OK ({ok} comprobaciones)")
 
 

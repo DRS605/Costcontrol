@@ -1,0 +1,32 @@
+{% extends "legal_base.html" %}
+{% block ltitle %}Aviso legal{% endblock %}
+{% block lbody %}
+<h1>Aviso legal</h1>
+
+<h2>Datos identificativos</h2>
+<p>En cumplimiento de la Ley 34/2002 de Servicios de la Sociedad de la
+Información y Comercio Electrónico (LSSI-CE), se informa de que el titular de
+este sitio y servicio es:</p>
+<ul>
+  <li><b>Titular:</b> {{ empresa }}</li>
+  <li><b>NIF/CIF:</b> {{ cif }}</li>
+  <li><b>Domicilio:</b> {{ domicilio }}</li>
+  <li><b>Contacto:</b> {{ email }}</li>
+  <li><b>Sitio web:</b> {{ dominio }}</li>
+</ul>
+
+<h2>Condiciones de uso</h2>
+<p>El acceso y uso del servicio implica la aceptación de estas condiciones, del
+<a href="{{ url_for('condiciones') }}">contrato de servicio</a> y de la
+<a href="{{ url_for('privacidad') }}">política de privacidad</a>.</p>
+
+<h2>Propiedad intelectual</h2>
+<p>El software, la marca CostControl, su diseño y contenidos pertenecen a
+{{ empresa }} o cuentan con licencia para su uso. Queda prohibida su reproducción
+o distribución sin autorización.</p>
+
+<h2>Responsabilidad</h2>
+<p>{{ empresa }} no se hace responsable del mal uso de la herramienta ni de los
+datos introducidos por los usuarios. Ver los límites de responsabilidad en las
+<a href="{{ url_for('condiciones') }}">condiciones del servicio</a>.</p>
+{% endblock %}

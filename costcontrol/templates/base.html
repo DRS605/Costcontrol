@@ -81,7 +81,16 @@
           {% endfor %}
         {% endwith %}
         {% block body %}{% endblock %}
-        <footer><span class="foot-tag">CONTROLA · ANALIZA · OPTIMIZA</span></footer>
+        <footer>
+          <span class="foot-tag">CONTROLA · ANALIZA · OPTIMIZA</span>
+          {% if multiuser %}
+          <span class="foot-legal">
+            <a href="{{ url_for('privacidad') }}">Privacidad</a> ·
+            <a href="{{ url_for('condiciones') }}">Condiciones</a> ·
+            <a href="{{ url_for('aviso_legal') }}">Aviso legal</a>
+          </span>
+          {% endif %}
+        </footer>
       </main>
     </div>
     <div class="scrim" id="scrim"></div>

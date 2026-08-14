@@ -82,7 +82,11 @@ herramienta traduce ese texto libre a líneas analíticas concretas.
 - 🔒 **Acceso por contraseña opcional** con pantalla de login de marca.
 - 🏢 **Modo multiusuario / multi-empresa** (para vender como servicio): cada
   cliente con su **cuenta**, su **equipo** de usuarios y su **base de datos
-  totalmente aislada**. Se activa con `COSTCONTROL_MULTIUSER=1`.
+  totalmente aislada**. Se activa con `COSTCONTROL_MULTIUSER=1`. Incluye
+  **registro**, **login por email**, **cambio y recuperación de contraseña**
+  (por email si hay SMTP, o restablecida por el administrador / la consola),
+  **gestión de equipo** (alta, reset, activar/desactivar) y **páginas legales**
+  (privacidad/RGPD, condiciones, aviso legal) configurables.
 
 ## Instalación y arranque
 
@@ -169,6 +173,9 @@ anterior.
 | `COSTCONTROL_MULTIUSER` | `1` para el modo **multiusuario / multi-empresa** (cuentas, equipos y datos aislados por cliente). |
 | `COSTCONTROL_DATA_DIR` | (Multiusuario) Carpeta donde se guardan la BBDD de control y las de cada empresa (por defecto `data/`). |
 | `COSTCONTROL_AUTH_DB` | (Multiusuario) Ruta del SQLite de cuentas/organizaciones (por defecto `data/costcontrol_auth.db`). |
+| `COSTCONTROL_SECURE` | `1` en producción tras HTTPS/proxy: cookies seguras + ProxyFix. |
+| `COSTCONTROL_EMPRESA`, `COSTCONTROL_CIF`, `COSTCONTROL_DOMICILIO`, `COSTCONTROL_EMAIL_CONTACTO`, `COSTCONTROL_DOMINIO` | Datos de tu empresa para rellenar las páginas legales. |
+| `COSTCONTROL_SMTP_HOST`, `_PORT`, `_USER`, `_PASSWORD`, `_FROM`, `_TLS` | (Opcional) Envío de emails de recuperación de contraseña. Sin ellos, la recuperación la hace el administrador o la consola. |
 | `COSTCONTROL_AI_PROVIDER` | `local` (IA gratis y privada con Ollama), `anthropic` (Claude, de pago), `auto` (por defecto) u `off`. |
 | `COSTCONTROL_AI_MODE` | `auto` (usa la IA solo si el motor local no entiende la frase), `siempre` u `off`. |
 | `COSTCONTROL_AI_MODEL` | Modelo a usar (por defecto `llama3.2` en local, `claude-haiku-4-5` en Anthropic). |
@@ -230,6 +237,24 @@ Para ofrecer CostControl como servicio a varios clientes, arranca con
 La IA se configura **una sola vez en el servidor** (ver *Como producto (SaaS)*),
 así que tus clientes no configuran nada. Publica con HTTPS (ver `DEPLOY.md`) y
 haz copias de `data/` periódicamente.
+
+**Recuperación de contraseña.** Si defines SMTP (`COSTCONTROL_SMTP_*`), el
+usuario recibe un enlace por email desde `/recuperar`. Si no, la puede
+restablecer un **administrador** de su empresa (Ajustes → Equipo) o tú desde la
+**consola**: `python manage.py reset-password cliente@correo.com`.
+
+**Soporte por consola.** `manage.py` te permite operar sin interfaz:
+
+```bash
+python manage.py listar-empresas
+python manage.py crear-empresa "Cliente SL" cliente@correo.com
+python manage.py reset-password cliente@correo.com
+python manage.py activar|desactivar cliente@correo.com
+```
+
+**Páginas legales.** `/privacidad`, `/condiciones` y `/aviso-legal` son
+plantillas orientativas que se rellenan con `COSTCONTROL_EMPRESA`, `_CIF`, etc.
+**Revísalas con un asesor legal** antes de publicarlas.
 
 ## Pruebas
 

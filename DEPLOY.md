@@ -194,11 +194,27 @@ descarga periódicamente la copia JSON de cada empresa. Guarda las copias
 - **Actualizar:** `git pull` y reinicia el servicio. Las bases de datos se
   **migran solas** al arrancar y los datos se conservan.
 
+## Recuperación de contraseña
+
+- **Con email (recomendado):** define `COSTCONTROL_SMTP_HOST`, `_PORT`, `_USER`,
+  `_PASSWORD`, `_FROM`. Entonces `/recuperar` envía un enlace al usuario.
+- **Sin email:** la restablece el **administrador** de la empresa (Ajustes →
+  Equipo) o tú desde la consola: `python manage.py reset-password email@cliente`.
+
+## Páginas legales
+
+Rellena tus datos con `COSTCONTROL_EMPRESA`, `COSTCONTROL_CIF`,
+`COSTCONTROL_DOMICILIO`, `COSTCONTROL_EMAIL_CONTACTO`, `COSTCONTROL_DOMINIO`.
+Las páginas `/privacidad`, `/condiciones` y `/aviso-legal` son **plantillas
+orientativas**: revísalas con un asesor legal antes de operar.
+
 ## Checklist antes de dar acceso a un cliente
 
 - [ ] `COSTCONTROL_SECRET` puesto a una frase larga y única.
 - [ ] `COSTCONTROL_SECURE=1` y el sitio abre por **https://**.
 - [ ] `COSTCONTROL_DATA_DIR` en disco **persistente** (no efímero).
 - [ ] `ANTHROPIC_API_KEY` puesta (si quieres la IA) — solo en el servidor.
+- [ ] Datos legales (`COSTCONTROL_EMPRESA`, `_CIF`, …) y páginas legales revisadas.
+- [ ] Recuperación de contraseña resuelta (SMTP configurado o proceso por consola claro).
 - [ ] Copia de seguridad diaria programada y probada (restaura una para verificar).
 - [ ] Entra en `/registro`, crea tu empresa y comprueba el flujo completo.

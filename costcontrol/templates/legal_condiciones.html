@@ -1,0 +1,55 @@
+{% extends "legal_base.html" %}
+{% block ltitle %}Condiciones del servicio{% endblock %}
+{% block lbody %}
+<h1>Condiciones del servicio</h1>
+<p class="muted">Última actualización: (indica la fecha al publicar)</p>
+
+<h2>1. Objeto</h2>
+<p>Estas condiciones regulan el uso de <b>CostControl</b>, una herramienta de
+control de costes por proyectos y reparto analítico, prestada por <b>{{ empresa }}</b>
+(NIF/CIF {{ cif }}) a través de {{ dominio }}.</p>
+
+<h2>2. Cuenta y uso</h2>
+<ul>
+  <li>Para usar el servicio debes crear una cuenta de empresa y eres responsable
+    de la confidencialidad de tus credenciales y de la actividad de tu equipo.</li>
+  <li>Te comprometes a introducir datos veraces y a usar la herramienta conforme
+    a la ley y a estas condiciones.</li>
+</ul>
+
+<h2>3. Precio y facturación</h2>
+<p>El servicio se presta bajo la modalidad de <b>suscripción</b> (por ejemplo,
+mensual o anual) según la tarifa vigente comunicada en la contratación. Los
+impuestos aplicables (IVA) se añadirán cuando corresponda. La falta de pago podrá
+suponer la <b>suspensión</b> del acceso.</p>
+
+<h2>4. Tus datos (encargado del tratamiento)</h2>
+<p>Los datos que introduces son de tu titularidad. <b>{{ empresa }}</b> los trata
+<b>por cuenta tuya</b> exclusivamente para prestar el servicio, siguiendo tus
+instrucciones y aplicando medidas de seguridad (incluido el <b>aislamiento de los
+datos de cada empresa</b>). Ver la <a href="{{ url_for('privacidad') }}">Política de privacidad</a>.</p>
+
+<h2>5. Disponibilidad y copias</h2>
+<p>Se realizan esfuerzos razonables para mantener el servicio disponible y para
+hacer copias de seguridad periódicas. No obstante, recomendamos que descargues
+tus propias copias (exportación a Excel/JSON) con regularidad. El servicio se
+presta "tal cual", sin garantía de disponibilidad ininterrumpida.</p>
+
+<h2>6. Limitación de responsabilidad</h2>
+<p>CostControl es una <b>herramienta de apoyo</b> a la gestión de costes; no
+sustituye el asesoramiento contable, fiscal o legal. {{ empresa }} no se
+responsabiliza de las decisiones tomadas a partir de la información de la
+herramienta ni de errores en los datos introducidos por el usuario. En la medida
+permitida por la ley, la responsabilidad se limita al importe abonado en los
+últimos 12 meses.</p>
+
+<h2>7. Cancelación</h2>
+<p>Puedes cancelar la suscripción en cualquier momento; el servicio seguirá
+activo hasta el fin del periodo pagado. A la baja podrás solicitar la exportación
+de tus datos durante un plazo razonable, tras el cual podrán ser eliminados.</p>
+
+<h2>8. Cambios y ley aplicable</h2>
+<p>Estas condiciones podrán actualizarse, avisando con antelación razonable. Se
+aplicará la legislación española y los tribunales que correspondan conforme a la
+normativa vigente.</p>
+{% endblock %}
