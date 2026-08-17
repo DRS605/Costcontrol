@@ -137,6 +137,23 @@ _REST_KW = ["resto", "el resto", "restante", "lo que quede", "lo demas",
 _OTHERS_KW = ["los demas", "las demas", "resto de proyectos", "resto de los proyectos",
               "los otros", "los restantes", "otros proyectos", "demas proyectos",
               "a los demas", "entre los demas"]
+
+# ponderar por el gasto/coste ya imputado a cada proyecto (driver calculado)
+_COST_WORDS = ("gasto", "gastos", "coste", "costes", "gasto acumulado", "imputad")
+_PERPROJ_KW = ("cada proyecto", "cada uno de los proyectos", "por proyecto",
+               "de los proyectos", "de cada", "que ha tenido", "que han tenido",
+               "acumulad", "imputad", "historic")
+
+# subconjunto de proyectos por palabra en su nombre/código
+# "que contienen finca", "que contengan la palabra finca", "que incluyan finca"...
+_SCOPE_RE = re.compile(
+    r"\bque\s+(?:contien\w+|conteng\w+|inclu\w+|lleven|lleva|tienen|tengan)\s+"
+    r"(?:la\s+palabra\s+|el\s+texto\s+|el\s+termino\s+|el\s+nombre\s+)?"
+    r"['\"]?([a-z0-9ñáéíóú]{2,})['\"]?")
+_SCOPE_RE_CON = re.compile(r"\bcon\s+['\"]?([a-z0-9ñáéíóú]{2,})['\"]?\s+en\s+(?:el\s+)?nombre")
+_SCOPE_RE_EMP = re.compile(r"\bempie\w+\s+(?:por|con)\s+['\"]?([a-z0-9ñáéíóú]{2,})['\"]?")
+_SCOPE_STOP = {"la", "el", "los", "las", "un", "una", "palabra", "texto", "termino",
+               "nombre", "proyecto", "proyectos", "que", "de"}
 _ALL_KW = ["todo", "integro", "integramente", "100%", "el total", "la totalidad"]
 _WEIGHT_PREPS = ["por ", "segun ", "en funcion de ", "en proporcion a ",
                  "prorrateo por ", "prorratear por ", "proporcional a ",
@@ -312,6 +329,75 @@ class Allocator:
     _DRIVER_ABORT = {"igual", "iguales", "partes", "cierto", "ahora", "cada",
                      "todo", "todos", "cada"}
 
+    def _keyword_scope(self, raw: str):
+        """Subconjunto de proyectos cuyo nombre/código contiene una palabra.
+
+        Devuelve (True, [proyectos]) si el texto pide 'los proyectos que
+        contienen X'; (True, []) si lo pide pero ninguno casa; None si no aplica.
+        """
+        n = norm(raw)
+        kw = None
+        for rx in (_SCOPE_RE, _SCOPE_RE_CON, _SCOPE_RE_EMP):
+            m = rx.search(n)
+            if m and m.group(1) not in _SCOPE_STOP:
+                kw = m.group(1)
+                break
+        if not kw:
+            return None
+        sel = [p for p in self.projects
+               if kw in norm(p.codigo) or kw in norm(p.nombre or "")]
+        return (True, sel, kw)
+
+    def _scoped_projects(self, raw: str, res):
+        """Proyectos sobre los que operar. Si se pide un subconjunto por palabra
+        y ninguno casa, avisa y devuelve None (el llamador debe abortar)."""
+        ks = self._keyword_scope(raw)
+        if ks is not None:
+            if not ks[1]:
+                res.warnings.append(
+                    f'Ningún proyecto contiene «{ks[2]}» en su nombre o código.')
+                return None
+            return ks[1]
+        return self._find_projects_in(raw) or self.projects
+
+    def _is_cost_weight(self, n: str) -> bool:
+        """True si se pide ponderar por el gasto/coste imputado de cada proyecto."""
+        has_cost = any(w in n for w in _COST_WORDS)
+        per_proj = any(w in n for w in _PERPROJ_KW)
+        return has_cost and per_proj
+
+    def _cost_weighted(self, total, raw, res):
+        """Reparte proporcionalmente al gasto/coste ya imputado a cada proyecto.
+
+        Usa el driver calculado 'gasto' (o 'coste') que la app inyecta con el
+        importe acumulado por proyecto. Respeta el subconjunto por palabra.
+        """
+        ks = self._keyword_scope(raw)
+        if ks is not None and not ks[1]:
+            res.warnings.append(f'Ningún proyecto contiene «{ks[2]}» en su nombre o código.')
+            return res
+        scope = ks[1] if ks is not None else (self._find_projects_in(raw) or self.projects)
+        usable, weights = [], []
+        for p in scope:
+            w = p.driver("gasto")
+            if w is None:
+                w = p.driver("coste")
+            if w is not None and Decimal(str(w)) > 0:
+                usable.append(p)
+                weights.append(Decimal(str(w)))
+        if not usable or sum(weights, Decimal("0")) <= 0:
+            res.warnings.append(
+                "No hay gasto imputado en esos proyectos todavía, así que no se "
+                "puede repartir en función del gasto. Reparte algo primero o usa "
+                "otro criterio (p. ej. por superficie o a partes iguales).")
+            return res
+        res.criterio = "ponderado por gasto imputado"
+        out = self._weighted(total, usable, weights, res, "gasto imputado")
+        etiqueta = f" (proyectos con «{ks[2]}»)" if ks is not None else ""
+        out.explanation.insert(
+            0, f"Reparto proporcional al gasto ya imputado de cada proyecto{etiqueta}.")
+        return out
+
     def _detect_driver(self, text: str) -> Optional[str]:
         n = norm(text)
         for prep in _WEIGHT_PREPS:
@@ -372,14 +458,19 @@ class Allocator:
                 out.explanation.insert(0, canon[1])
                 return out
 
+        # ---- MODO: ponderado por el gasto/coste imputado de cada proyecto
+        if not _numbers(raw) and self._is_cost_weight(n):
+            return self._cost_weighted(total, raw, res)
+
         cada_igual = bool(re.search(r"cada (uno|proyecto|centro)", n))
         equal_mode = any(k in n for k in _EQUAL_KW) or cada_igual
         driver = self._detect_driver(raw)
 
         # ---- MODO: a partes iguales -------------------------------------
         if equal_mode and not _numbers(raw):
-            projs = self._find_projects_in(raw) or self.projects
-            projs = [p for p in projs] or self.projects
+            projs = self._scoped_projects(raw, res)
+            if projs is None:
+                return res
             if not projs:
                 res.warnings.append("No se han identificado proyectos para el reparto.")
                 return res
@@ -387,7 +478,9 @@ class Allocator:
 
         # ---- MODO: ponderado por driver guardado (sin números) ----------
         if driver and not _numbers(raw):
-            projs = self._find_projects_in(raw) or self.projects
+            projs = self._scoped_projects(raw, res)
+            if projs is None:
+                return res
             weights = []
             usable = []
             for p in projs:

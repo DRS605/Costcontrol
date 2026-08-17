@@ -280,6 +280,53 @@ def test_proporcional_a_driver():
     assert imp(r, "PROY3") == Decimal("200.00")
 
 
+def _projs_finca():
+    return [
+        Project("FINCA-A", "Finca del Sol", {"gasto": Decimal("3000"), "coste": Decimal("3000")}),
+        Project("FINCA-B", "Finca del Mar", {"gasto": Decimal("1000"), "coste": Decimal("1000")}),
+        Project("OBRA-1", "Obra Centro", {"gasto": Decimal("5000"), "coste": Decimal("5000")}),
+    ]
+
+
+def test_subconjunto_por_palabra_iguales():
+    r = allocate("1000", "a partes iguales entre los proyectos que contengan finca", _projs_finca())
+    assert r.ok
+    assert imp(r, "FINCA-A") == Decimal("500.00")
+    assert imp(r, "FINCA-B") == Decimal("500.00")
+    assert imp(r, "OBRA-1") == Decimal("0")
+
+
+def test_reparto_por_gasto_imputado():
+    r = allocate("1000", "reparte según el gasto imputado de cada proyecto", _projs_finca())
+    assert r.ok
+    # 3000/1000/5000 sobre 9000
+    assert imp(r, "FINCA-A") == Decimal("333.33")
+    assert imp(r, "OBRA-1") == Decimal("555.56")
+
+
+def test_gasto_generales_por_gasto_de_fincas():
+    # la frase real del usuario
+    r = allocate("1000",
+                 "hazme el reparto de gastos generales en función del porcentaje de "
+                 "gastos totales que ha tenido cada uno de los proyectos que contiene "
+                 "la palabra finca", _projs_finca())
+    assert r.ok
+    assert imp(r, "FINCA-A") == Decimal("750.00")   # 3000/4000
+    assert imp(r, "FINCA-B") == Decimal("250.00")   # 1000/4000
+    assert imp(r, "OBRA-1") == Decimal("0")         # excluida (no es finca)
+
+
+def test_gasto_sin_datos_avisa():
+    projs = [Project("A", "Alfa"), Project("B", "Beta")]  # sin gasto imputado
+    r = allocate("1000", "reparte en función del gasto de cada proyecto", projs)
+    assert not r.ok and r.warnings
+
+
+def test_palabra_inexistente_avisa():
+    r = allocate("1000", "a partes iguales entre los proyectos que contengan chalet", _projs_finca())
+    assert not r.ok and r.warnings
+
+
 def test_empty():
     r = allocate("1000", "", _projs())
     assert not r.ok

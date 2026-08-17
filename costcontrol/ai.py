@@ -77,6 +77,10 @@ SINTAXIS CANÓNICA (sepáralo todo con comas):
 - Todo a uno:            "todo PROY1"
 - Ponderado por pesos:   "por peso: PROY1 100, PROY2 300"
 - Ponderado por driver:  "según superficie"  (usa un driver guardado del proyecto)
+- Ponderado por gasto:    "según el gasto de cada proyecto"  (usa el gasto ya
+  imputado a cada proyecto; sirve para "en función del % de gasto de cada proyecto")
+- Subconjunto por palabra: añade "de los proyectos que contengan finca" para
+  limitar el reparto a los proyectos cuyo nombre/código contiene esa palabra.
 - Reutilizar una regla:  "como la regla NOMBRE"
 - Regla en subconjunto:  "como la regla NOMBRE, solo PROY1 y PROY2"
 - Combinar:              "50% como la regla NOMBRE, resto PROY9"

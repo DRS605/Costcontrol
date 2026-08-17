@@ -32,6 +32,8 @@ herramienta traduce ese texto libre a líneas analíticas concretas.
   | `por m2: PROY-A 100, PROY-B 300` | ponderado por pesos |
   | `el doble a PROY-A que a PROY-B` | pesos relativos (2 : 1) |
   | `según superficie` · `proporcional a horas` | ponderado por un *driver* guardado |
+  | `según el gasto de cada proyecto` | ponderado por el **gasto ya imputado** a cada proyecto |
+  | `… de los proyectos que contengan finca` | limita el reparto a los proyectos cuyo **nombre/código** contiene esa palabra |
   | `PROY-A 30%, PROY-B 500 €, resto PROY-C` | mezcla de %, importe y resto |
   | `como la regla Obra estándar` | reutiliza una **regla guardada** por su nombre |
   | `según la regla Obra, pero solo PROY-A y PROY-B` | **reescala** la regla a un subconjunto |

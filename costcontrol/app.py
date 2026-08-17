@@ -314,9 +314,20 @@ def _doc_bloqueado(conn, doc):
 
 
 def _projects_for_allocator(conn):
+    # gasto ya imputado por proyecto (para repartos "en función del gasto")
+    try:
+        imp = db.imputado_por_proyecto(conn)
+    except Exception:
+        imp = {}
     out = []
     for p in db.list_proyectos(conn, solo_activos=True):
         drivers = {k: Decimal(str(v)) for k, v in (p.get("drivers") or {}).items()}
+        gasto = Decimal(str(imp.get(p["id"], 0) or 0))
+        # drivers calculados: permiten "según el gasto / coste imputado"
+        drivers.setdefault("gasto", gasto)
+        drivers.setdefault("gastos", gasto)
+        drivers.setdefault("coste", gasto)
+        drivers.setdefault("costes", gasto)
         out.append(Project(codigo=p["codigo"], nombre=p["nombre"], drivers=drivers))
     return out
 
