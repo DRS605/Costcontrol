@@ -1260,6 +1260,8 @@ def presupuestos():
     centros_l = db.list_centros(conn)
     pres_centro = db.get_presupuestos_centro(conn, ejercicio)
     seguimiento_centro = db.seguimiento_centros(conn, ejercicio)
+    partidas_l = db.list_partidas(conn, solo_activas=True)
+    seguimiento_partida = db.seguimiento_partidas(conn, ejercicio)
     cierres = db.list_cierres(conn)
     cerrados = db.cierres_set(conn)
     conn.close()
@@ -1268,6 +1270,7 @@ def presupuestos():
                            seguimiento=seguimiento, meses=MESES, cierres=cierres,
                            cerrados=cerrados, centros=centros_l, pres_centro=pres_centro,
                            seguimiento_centro=seguimiento_centro,
+                           partidas=partidas_l, seguimiento_partida=seguimiento_partida,
                            anios=sorted({ejercicio, 2025, 2026, 2027}))
 
 
@@ -1291,6 +1294,22 @@ def presupuestos_guardar():
     conn.close()
     flash("Presupuestos guardados.", "ok")
     return redirect(url_for("presupuestos", ejercicio=ejercicio))
+
+
+@app.route("/presupuestos/partida/guardar", methods=["POST"])
+def presupuesto_partida_guardar():
+    from .allocation import parse_number
+    f = request.form
+    ejercicio = int(f.get("ejercicio") or 2026)
+    if not f.get("proyecto_id") or not f.get("partida_id"):
+        flash("Elige proyecto y partida.", "error")
+        return redirect(url_for("presupuestos", ejercicio=ejercicio))
+    conn = get_conn()
+    db.set_presupuesto_partida(conn, int(f["proyecto_id"]), int(f["partida_id"]),
+                               ejercicio, float(parse_number(f.get("importe")) or 0))
+    conn.close()
+    flash("Presupuesto por partida guardado.", "ok")
+    return redirect(url_for("presupuestos", ejercicio=ejercicio) + "#partidas")
 
 
 @app.route("/cierres/cambiar", methods=["POST"])

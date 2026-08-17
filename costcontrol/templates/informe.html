@@ -169,22 +169,19 @@
   <h2>Proyecto × partida</h2>
   <div class="table-wrap">
   <table>
-    <thead><tr><th>Proyecto</th><th>Partida</th><th class="num">Presupuesto</th><th class="num">Imputado</th><th class="num">Desviación</th></tr></thead>
+    <thead><tr><th>Proyecto</th><th>Partida</th><th class="num">Imputado</th></tr></thead>
     <tbody>
     {% for r in matriz_pp %}
-      {% set pres = r.presupuesto if r.presupuesto is defined else 0 %}
       <tr>
         <td><b>{{ r.proyecto_codigo }}</b> <span class="small muted">{{ r.proyecto_nombre }}</span></td>
         <td>{{ r.partida_nombre or r.partida_codigo or 'Sin partida' }}</td>
-        <td class="num">{{ pres | eur if pres else '—' }}</td>
         <td class="num">{{ r.imputado | eur }}</td>
-        <td class="num">{% if pres %}<span style="color:{{ '#b3261e' if r.imputado > pres else '#4f9a10' }}">{{ (pres - r.imputado) | eur }}</span>{% else %}—{% endif %}</td>
       </tr>
     {% endfor %}
     </tbody>
   </table>
   </div>
-  <p class="small muted" style="margin-top:8px">El presupuesto por partida se define por proyecto y ejercicio (próximamente editable desde Presupuestos).</p>
+  <p class="small muted" style="margin-top:8px">El <b>presupuesto por partida y su semáforo</b> están en <a href="{{ url_for('presupuestos') }}#partidas">Presupuestos</a>.</p>
 </div>
 {% endif %}
 {% endif %}

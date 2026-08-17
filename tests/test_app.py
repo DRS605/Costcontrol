@@ -339,6 +339,23 @@ def run():
     assert b"Resumen por partida" in client.get("/informe").data
     print("  ok  partidas: 'en la partida X' + informe por partida"); ok += 1
 
+    # presupuesto por partida + seguimiento con semáforo
+    conn = db.connect()
+    pa_id = db.list_partidas(conn)[0]["id"]
+    proj_id = [p["id"] for p in db.list_proyectos(conn) if p["codigo"] == "PROD-TOM"][0]
+    conn.close()
+    client.post("/presupuestos/partida/guardar",
+                data={"ejercicio": "2026", "proyecto_id": proj_id,
+                      "partida_id": pa_id, "importe": "400"}, follow_redirects=True)
+    conn = db.connect()
+    seg = {(s["proyecto_id"], s["partida_id"]): s for s in db.seguimiento_partidas(conn, 2026)}
+    conn.close()
+    fila = seg.get((proj_id, pa_id))
+    assert fila and abs(fila["presupuesto"] - 400) < 0.01
+    assert fila["estado"] == "excedido", "500 imputado sobre 400 debería estar excedido"
+    assert b"Presupuesto por partida" in client.get("/presupuestos?ejercicio=2026").data
+    print("  ok  presupuesto por partida + seguimiento (semáforo)"); ok += 1
+
     print(f"\nTODO OK ({ok} comprobaciones)")
 
 

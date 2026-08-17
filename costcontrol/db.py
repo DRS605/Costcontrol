@@ -572,6 +572,44 @@ def imputado_proyecto_partida(conn, ejercicio=None) -> List[Dict[str, Any]]:
     return filas
 
 
+def seguimiento_partidas(conn, ejercicio) -> List[Dict[str, Any]]:
+    """Presupuesto vs imputado por (proyecto, partida) para un ejercicio, con
+    estado semáforo. Incluye combinaciones con presupuesto y/o con imputado."""
+    pres = {}
+    for r in rows_to_dicts(conn.execute(
+            "SELECT pp.proyecto_id, pp.partida_id, pp.importe, "
+            "p.codigo AS proyecto_codigo, p.nombre AS proyecto_nombre, "
+            "pa.codigo AS partida_codigo, pa.nombre AS partida_nombre "
+            "FROM presupuestos_partida pp "
+            "JOIN proyectos p ON p.id=pp.proyecto_id "
+            "JOIN partidas pa ON pa.id=pp.partida_id WHERE pp.ejercicio=?",
+            (int(ejercicio),)).fetchall()):
+        pres[(r["proyecto_id"], r["partida_id"])] = r
+    imp, meta = {}, {}
+    for r in imputado_proyecto_partida(conn, ejercicio):
+        if r.get("partida_id") is None:
+            continue
+        k = (r["proyecto_id"], r["partida_id"])
+        imp[k] = float(r["imputado"] or 0)
+        meta[k] = r
+    filas = []
+    for k in set(pres) | set(imp):
+        base = pres.get(k) or meta.get(k)
+        presu = float(pres.get(k, {}).get("importe", 0) or 0)
+        imputado = imp.get(k, 0.0)
+        pct = (imputado / presu * 100) if presu else 0
+        estado = "ok" if pct <= 85 else ("aviso" if pct <= 100 else "excedido")
+        filas.append({
+            "proyecto_id": k[0], "partida_id": k[1],
+            "proyecto_codigo": base["proyecto_codigo"], "proyecto_nombre": base["proyecto_nombre"],
+            "partida_codigo": base["partida_codigo"], "partida_nombre": base["partida_nombre"],
+            "presupuesto": presu, "imputado": imputado,
+            "desviacion": presu - imputado, "pct": pct, "estado": estado,
+        })
+    filas.sort(key=lambda f: (f["proyecto_codigo"], f["partida_codigo"] or ""))
+    return filas
+
+
 def set_presupuesto_partida(conn, proyecto_id, partida_id, ejercicio, importe) -> None:
     with conn:
         conn.execute(

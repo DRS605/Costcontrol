@@ -156,6 +156,64 @@
   {% endif %}
 </div>
 
+<div class="card" id="partidas">
+  <h2>Presupuesto por partida {{ ejercicio }}</h2>
+  <p class="small muted">Define el presupuesto de cada partida dentro de un proyecto y sigue su consumo con semáforo.</p>
+  {% if partidas %}
+  <form method="post" action="{{ url_for('presupuesto_partida_guardar') }}" class="inline-form" style="flex-wrap:wrap; gap:10px; margin-bottom:8px">
+    <input type="hidden" name="ejercicio" value="{{ ejercicio }}">
+    <div><label>Proyecto</label>
+      <select name="proyecto_id" required>
+        <option value="">— proyecto —</option>
+        {% for p in proyectos %}<option value="{{ p.id }}">{{ p.codigo }}</option>{% endfor %}
+      </select>
+    </div>
+    <div><label>Partida</label>
+      <select name="partida_id" required>
+        <option value="">— partida —</option>
+        {% for pa in partidas %}<option value="{{ pa.id }}">{{ pa.codigo }} · {{ pa.nombre }}</option>{% endfor %}
+      </select>
+    </div>
+    <div><label>Presupuesto (€)</label><input name="importe" placeholder="0,00"></div>
+    <div style="align-self:flex-end"><button class="btn accent">Guardar</button></div>
+  </form>
+
+  {% if seguimiento_partida %}
+  <div class="table-wrap">
+  <table>
+    <thead><tr><th>Proyecto</th><th>Partida</th><th class="num">Presupuesto</th><th class="num">Imputado</th><th style="width:150px">Consumo</th><th>Estado</th></tr></thead>
+    <tbody>
+    {% for s in seguimiento_partida %}
+      <tr>
+        <td><b>{{ s.proyecto_codigo }}</b></td>
+        <td>{{ s.partida_nombre or s.partida_codigo }}</td>
+        <td class="num">{{ s.presupuesto | eur if s.presupuesto else '—' }}</td>
+        <td class="num">{{ s.imputado | eur }}</td>
+        <td>
+          {% if s.presupuesto %}
+          <div class="bar"><span class="{{ 'over' if s.pct > 100 }}" style="width: {{ [s.pct,100]|min }}%"></span></div>
+          <span class="small muted">{{ '%.0f'|format(s.pct) }}%</span>
+          {% else %}<span class="small muted">sin presupuesto</span>{% endif %}
+        </td>
+        <td>
+          {% if not s.presupuesto %}<span class="badge">—</span>
+          {% elif s.estado=='excedido' %}<span class="badge b-excedido">⛔ Excedido</span>
+          {% elif s.estado=='aviso' %}<span class="badge b-aviso">⚠ Cerca del límite</span>
+          {% else %}<span class="badge b-ok">✓ En presupuesto</span>{% endif %}
+        </td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% else %}
+  <div class="empty">Aún no hay presupuestos ni imputaciones por partida en {{ ejercicio }}.</div>
+  {% endif %}
+  {% else %}
+  <div class="empty">Crea primero <a href="{{ url_for('partidas') }}">partidas de coste</a> para presupuestarlas.</div>
+  {% endif %}
+</div>
+
 <div class="card">
   <h2>Cierre de periodos {{ ejercicio }}</h2>
   <p class="small muted">Al cerrar un mes, sus documentos no se pueden crear, editar, borrar ni repartir.</p>
