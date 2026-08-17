@@ -57,7 +57,7 @@
           <option value="">— sin partida —</option>
           {% for pa in partidas %}<option value="{{ pa.id }}">{{ pa.codigo }} · {{ pa.nombre }}</option>{% endfor %}
         </select>
-        <p class="small muted" style="margin-top:4px">O escríbelo: <code>… en la partida {{ partidas[0].nombre or partidas[0].codigo }}</code>.</p>
+        <p class="small muted" style="margin-top:4px">O escríbelo: <code>… en la partida {{ partidas[0].nombre or partidas[0].codigo }}</code>. Una distinta por línea: <code>60% A en la partida X, 40% B en la partida Y</code>.</p>
       </div>
       {% endif %}
 
@@ -208,13 +208,16 @@ function render(d){
   }
   if(d.partida){
     html += `<div class="okbox">🏷️ Se imputará a la partida <b>${d.partida.codigo} · ${d.partida.nombre}</b>.</div>`;
+  } else if(d.partidas_por_linea){
+    html += `<div class="okbox">🏷️ <b>Partida por línea:</b> cada proyecto se imputa a su propia partida (ver columna).</div>`;
   }
   if(d.lineas && d.lineas.length){
-    html += '<table id="preview-lines" style="margin-top:14px"><thead><tr><th>Proyecto</th><th class="num">%</th><th class="num">Importe</th><th>Base</th></tr></thead><tbody>';
+    const conPart = d.lineas.some(l=>l.partida);
+    html += '<table id="preview-lines" style="margin-top:14px"><thead><tr><th>Proyecto</th>' + (conPart?'<th>Partida</th>':'') + '<th class="num">%</th><th class="num">Importe</th><th>Base</th></tr></thead><tbody>';
     d.lineas.forEach(l=>{
-      html += `<tr><td><b>${l.proyecto}</b> <span class="small muted">${l.nombre||''}</span></td><td class="num">${l.porcentaje.toFixed(1)}%</td><td class="num">${eur(l.importe)}</td><td class="small muted">${l.base}</td></tr>`;
+      html += `<tr><td><b>${l.proyecto}</b> <span class="small muted">${l.nombre||''}</span></td>` + (conPart?`<td class="small">${l.partida?('🏷️ '+l.partida):'—'}</td>`:'') + `<td class="num">${l.porcentaje.toFixed(1)}%</td><td class="num">${eur(l.importe)}</td><td class="small muted">${l.base}</td></tr>`;
     });
-    html += `</tbody><tfoot><tr><th>Repartido (${d.criterio})</th><th></th><th class="num">${eur(d.repartido)}</th><th class="small muted">de ${eur(d.total)}</th></tr></tfoot></table>`;
+    html += `</tbody><tfoot><tr><th>Repartido (${d.criterio})</th>` + (conPart?'<th></th>':'') + `<th></th><th class="num">${eur(d.repartido)}</th><th class="small muted">de ${eur(d.total)}</th></tr></tfoot></table>`;
     html += `<div style="margin-top:8px"><button type="button" class="btn sec sm" onclick='setManualFromPreview(${JSON.stringify(d.lineas)})'>✎ Ajustar a mano</button></div>`;
   }
   if(d.explicacion && d.explicacion.length){

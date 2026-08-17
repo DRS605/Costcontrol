@@ -363,6 +363,41 @@ def _extraer_partida(conn, texto):
     return part["id"], limpio, part
 
 
+def _partidas_reparto(conn, texto, explicit_id=None):
+    """Resuelve las partidas de un reparto, con soporte de **una partida por
+    línea**.
+
+    Divide el texto en cláusulas (por comas) y detecta 'en la partida X' en
+    cada una, asociándola a los proyectos de esa cláusula. Devuelve:
+      - mapa {proyecto_id: partida_id}  (partidas por línea)
+      - global_pid                       (una partida para todas las líneas)
+      - texto_split                      (texto sin las partidas, para el motor)
+
+    Reglas: si se elige una partida en el desplegable, se aplica a todo. Si en el
+    texto hay una sola partida distinta, se aplica a todo (compatibilidad). Si
+    hay varias, cada proyecto recibe la suya.
+    """
+    proyectos = db.list_proyectos(conn, solo_activos=True)
+    mapa, limpio_parts = {}, []
+    for cl in re.split(r"[,;\n]", texto or ""):
+        pid_part, cl_limpio, _ = _extraer_partida(conn, cl)
+        if pid_part:
+            low = db._sin_acentos(cl.lower())
+            for p in proyectos:
+                if (p["codigo"].lower() in cl.lower()
+                        or (p["nombre"] and db._sin_acentos(p["nombre"].lower()) in low)):
+                    mapa[p["id"]] = pid_part
+        limpio_parts.append(cl_limpio)
+    texto_split = ", ".join(x for x in limpio_parts if x.strip())
+    distintas = set(mapa.values())
+    global_pid = None
+    if explicit_id:
+        global_pid, mapa = explicit_id, {}
+    elif len(distintas) == 1:
+        global_pid, mapa = next(iter(distintas)), {}
+    return mapa, global_pid, texto_split
+
+
 def _interpretar(alloc, importe, texto):
     """Interpreta el reparto: motor determinista + IA opcional como refuerzo.
 
@@ -803,9 +838,17 @@ def reparto_previsualizar(did):
         abort(404)
     alloc = _allocator(conn)
     texto = request.json.get("texto", "") if request.is_json else request.form.get("texto", "")
-    partida_id, texto_split, partida = _extraer_partida(conn, texto)
+    mapa, global_pid, texto_split = _partidas_reparto(conn, texto)
+    part_names = {p["id"]: (p["nombre"] or p["codigo"]) for p in db.list_partidas(conn)}
+    cod2id = {p["codigo"]: p["id"] for p in db.list_proyectos(conn)}
+    global_part = db.get_partida(conn, global_pid) if global_pid else None
     conn.close()
     res = _interpretar(alloc, doc["importe"], texto_split)
+
+    def _part_de(cod):
+        pid = mapa.get(cod2id.get(cod), global_pid)
+        return part_names.get(pid) if pid else None
+
     return {
         "ok": res.ok,
         "criterio": res.criterio,
@@ -813,14 +856,16 @@ def reparto_previsualizar(did):
         "repartido": float(res.repartido),
         "lineas": [
             {"proyecto": l.proyecto, "nombre": l.nombre, "importe": float(l.importe),
-             "porcentaje": float(l.porcentaje), "base": l.base}
+             "porcentaje": float(l.porcentaje), "base": l.base,
+             "partida": _part_de(l.proyecto)}
             for l in res.lines
         ],
         "explicacion": res.explanation,
         "avisos": res.warnings,
         "ia": res.ia,
-        "partida": {"id": partida["id"], "codigo": partida["codigo"],
-                    "nombre": partida["nombre"]} if partida else None,
+        "partida": {"id": global_part["id"], "codigo": global_part["codigo"],
+                    "nombre": global_part["nombre"]} if global_part else None,
+        "partidas_por_linea": bool(mapa),
     }
 
 
@@ -837,11 +882,9 @@ def reparto_guardar(did):
         return redirect(url_for("documento_reparto", did=did))
     alloc = _allocator(conn)
     texto = request.form.get("texto", "")
-    # partida: dropdown explícito o detectada en el texto ("en la partida X")
-    partida_id, texto_split, partida = _extraer_partida(conn, texto)
-    if request.form.get("partida_id"):
-        partida_id = int(request.form["partida_id"])
-        partida = db.get_partida(conn, partida_id)
+    # partidas: desplegable explícito, una partida global, o una por línea
+    explicit = int(request.form["partida_id"]) if request.form.get("partida_id") else None
+    mapa, global_pid, texto_split = _partidas_reparto(conn, texto, explicit)
     res = _interpretar(alloc, doc["importe"], texto_split)
     if not res.ok:
         conn.close()
@@ -859,13 +902,14 @@ def reparto_guardar(did):
         "importe": float(l.importe),
         "porcentaje": float(l.porcentaje),
         "base": f"{origen} · {l.base}",
-        "partida_id": partida_id,
+        "partida_id": mapa.get(cod2id.get(l.proyecto), global_pid),
     } for l in res.lines]
     db.replace_repartos(conn, did, lines)
+    usadas = {v for v in (mapa.values() if mapa else ([global_pid] if global_pid else []))}
     conn.close()
     extra = " (interpretado con IA)" if res.ia and res.ia.get("usada") else ""
-    if partida:
-        extra += f" · partida: {partida['nombre'] or partida['codigo']}"
+    if usadas:
+        extra += f" · {len(usadas)} partida(s)"
     flash(f"Reparto guardado: {len(lines)} línea(s) analítica(s).{extra}", "ok")
     return redirect(url_for("documento_reparto", did=did))
 
@@ -1057,11 +1101,10 @@ def reparto_masivo_aplicar():
     docs = db.list_documentos(conn, ids=ids)
     cerrados = db.cierres_set(conn)
 
-    # partida: dropdown explícito o detectada en el texto ("en la partida X")
-    partida_id, texto, partida = _extraer_partida(conn, texto)
-    if request.form.get("partida_id"):
-        partida_id = int(request.form["partida_id"])
-        partida = db.get_partida(conn, partida_id)
+    # partidas: desplegable, una global o una por línea (por proyecto)
+    explicit = int(request.form["partida_id"]) if request.form.get("partida_id") else None
+    mapa, global_pid, texto = _partidas_reparto(conn, texto, explicit)
+    hay_partida = bool(mapa) or global_pid is not None
 
     # La misma frase se aplica a muchos documentos: si hace falta la IA, se
     # traduce UNA sola vez a la sintaxis canónica y luego se aplica a cada
@@ -1089,7 +1132,7 @@ def reparto_masivo_aplicar():
                 "importe": float(l.importe),
                 "porcentaje": float(l.porcentaje),
                 "base": f"[masivo] {origen} · {l.base}",
-                "partida_id": partida_id,
+                "partida_id": mapa.get(cod2id.get(l.proyecto), global_pid),
             } for l in res.lines]
             db.replace_repartos(conn, d["id"], lines)
             aplicados += 1
@@ -1097,8 +1140,8 @@ def reparto_masivo_aplicar():
             fallidos += 1
     conn.close()
     msg = f"Reparto masivo aplicado a {aplicados} documento(s)."
-    if partida:
-        msg += f" · partida: {partida['nombre'] or partida['codigo']}"
+    if hay_partida:
+        msg += " · con partida"
     if ia_usada:
         msg += " (interpretado con IA)"
     if fallidos:

@@ -81,6 +81,9 @@ SINTAXIS CANÓNICA (sepáralo todo con comas):
   imputado a cada proyecto; sirve para "en función del % de gasto de cada proyecto")
 - Subconjunto por palabra: añade "de los proyectos que contengan finca" para
   limitar el reparto a los proyectos cuyo nombre/código contiene esa palabra.
+- Partida (subpartida de coste): añade "en la partida NOMBRE". Una para todo
+  ("60% A, 40% B en la partida envases") o una por línea, poniéndola en cada
+  cláusula ("60% A en la partida envases, 40% B en la partida embalaje").
 - Reutilizar una regla:  "como la regla NOMBRE"
 - Regla en subconjunto:  "como la regla NOMBRE, solo PROY1 y PROY2"
 - Combinar:              "50% como la regla NOMBRE, resto PROY9"

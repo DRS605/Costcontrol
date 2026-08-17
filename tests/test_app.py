@@ -356,6 +356,26 @@ def run():
     assert b"Presupuesto por partida" in client.get("/presupuestos?ejercicio=2026").data
     print("  ok  presupuesto por partida + seguimiento (semáforo)"); ok += 1
 
+    # partida distinta por línea (por proyecto) en el mismo reparto
+    conn = db.connect()
+    db.upsert_partida(conn, "ENV", "Envases")
+    db.upsert_proyecto(conn, "PL-X", "Proyecto Equis")
+    db.upsert_proyecto(conn, "PL-T", "Proyecto Te")
+    pld = db.insert_documento(conn, tipo="factura", numero="PL1", importe=1000,
+                              fecha="2026-07-01", concepto="z")
+    conn.commit(); conn.close()
+    txt = "60% PL-X en la partida envases, 40% PL-T en la partida costes de producción"
+    dj = client.post(f"/documentos/{pld}/reparto/previsualizar", json={"texto": txt}).get_json()
+    assert dj["partidas_por_linea"] is True
+    porl = {l["proyecto"]: l["partida"] for l in dj["lineas"]}
+    assert porl.get("PL-X") == "Envases" and porl.get("PL-T") == "Costes de producción"
+    client.post(f"/documentos/{pld}/reparto/guardar", data={"texto": txt}, follow_redirects=True)
+    conn = db.connect()
+    reps = {r["proyecto_codigo"]: r["partida_id"] for r in db.get_repartos(conn, pld)}
+    conn.close()
+    assert reps["PL-X"] != reps["PL-T"] and reps["PL-X"] and reps["PL-T"], "cada línea debe tener su partida"
+    print("  ok  partida distinta por línea (por proyecto)"); ok += 1
+
     print(f"\nTODO OK ({ok} comprobaciones)")
 
 

@@ -20,6 +20,8 @@ herramienta traduce ese texto libre a líneas analíticas concretas.
 - 🏷️ **Imputación por partida**: al repartir puedes imputar a una partida —
   eligiéndola en el desplegable o escribiéndolo (`… en la partida costes de
   producción`) — y ver el **informe por partida** y la matriz **proyecto × partida**.
+  Admite **una partida por línea**: `60% PROY-A en la partida envases, 40% PROY-B
+  en la partida embalaje` imputa cada proyecto a su propia partida.
 - 🎯 **Presupuesto por partida** (por proyecto y ejercicio) con **seguimiento y
   semáforo** (verde/ámbar/rojo) en la página de Presupuestos.
 - ✍️ **Reparto analítico en lenguaje natural**: escribes *cómo* quieres repartir
