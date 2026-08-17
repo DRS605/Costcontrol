@@ -458,6 +458,27 @@ def inject_globals():
             "ia_activa": ai.available()}
 
 
+@app.route("/ejemplo/cargar", methods=["POST"])
+def ejemplo_cargar():
+    """Carga datos de demostración en una cuenta vacía (onboarding)."""
+    conn = get_conn()
+    if db.list_proyectos(conn) or db.list_documentos(conn):
+        conn.close()
+        flash("Los datos de ejemplo solo se cargan en una cuenta vacía.", "error")
+        return redirect(url_for("index"))
+    try:
+        import seed_demo
+        r = seed_demo.seed(conn)
+    except Exception as e:  # noqa: BLE001
+        conn.close()
+        flash(f"No se pudieron cargar los datos de ejemplo: {e}", "error")
+        return redirect(url_for("index"))
+    conn.close()
+    flash(f"Datos de ejemplo cargados: {r['proyectos']} proyectos y {r['documentos']} documentos. "
+          "Explóralos y, cuando quieras empezar en serio, restaura una copia vacía o bórralos.", "ok")
+    return redirect(url_for("index"))
+
+
 @app.route("/ajustes")
 def ajustes():
     equipo = None
@@ -535,11 +556,13 @@ def index():
                     s["importe"]) for s in serie]
     graf_mensual = charts.barras_verticales(serie_datos)
 
+    vacio = (tot.get("n_docs") or 0) == 0 and not por_proyecto and not por_centro
     return render_template("index.html", tot=tot, por_proyecto=por_proyecto,
                            por_centro=por_centro, ejercicios=ejercicios_l,
                            ejercicio_sel=ejercicio, graf_centro=graf_centro,
                            graf_proyecto=graf_proyecto, graf_mensual=graf_mensual,
-                           hay_serie=bool(serie_datos), alertas=alertas, comp=comp)
+                           hay_serie=bool(serie_datos), alertas=alertas, comp=comp,
+                           vacio=vacio)
 
 
 # --- proyectos ------------------------------------------------------------
@@ -1085,6 +1108,32 @@ def reparto_masivo():
                            cuentas=cuentas_l, ejercicios=ejercicios_l, meses=MESES,
                            proyectos=proyectos_l, reglas=reglas_l, total=total,
                            partidas=partidas_l, filtro=filtro_display)
+
+
+@app.route("/reparto-masivo/quitar", methods=["POST"])
+def reparto_masivo_quitar():
+    """Deshace (borra) el reparto de los documentos seleccionados."""
+    conn = get_conn()
+    ids = [int(x) for x in request.form.getlist("doc_ids") if x]
+    if not ids:
+        conn.close()
+        flash("Selecciona documentos para quitarles el reparto.", "error")
+        return redirect(request.referrer or url_for("reparto_masivo"))
+    cerrados = db.cierres_set(conn)
+    docs = db.list_documentos(conn, ids=ids)
+    quitados, bloqueados = 0, 0
+    for d in docs:
+        if (d.get("ejercicio"), d.get("periodo")) in cerrados:
+            bloqueados += 1
+            continue
+        db.replace_repartos(conn, d["id"], [])
+        quitados += 1
+    conn.close()
+    msg = f"Reparto quitado de {quitados} documento(s)."
+    if bloqueados:
+        msg += f" {bloqueados} en periodo cerrado (omitidos)."
+    flash(msg, "ok" if quitados else "error")
+    return redirect(url_for("documentos", estado="pendiente"))
 
 
 @app.route("/reparto-masivo/aplicar", methods=["POST"])

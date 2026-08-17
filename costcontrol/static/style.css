@@ -196,6 +196,13 @@ textarea { resize: vertical; min-height: 74px; }
 .iabox { background: linear-gradient(100deg,#f3fbe6,#eefbf4); border: 1px solid #cdeaa6; color: #2f5312; border-radius: var(--radius-sm); padding: 11px 14px; margin-top: 12px; font-size: 13.5px; }
 .iabox code { background: #fff; border: 1px solid #cfe6ad; color: #2f5312; padding: 1px 7px; border-radius: 6px; font-weight: 600; }
 .ia-dot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: var(--lime); margin-left: 4px; vertical-align: middle; box-shadow: 0 0 0 2px rgba(143,220,31,.25); }
+.onboarding { border: 1px solid #cfe6ad; background: linear-gradient(180deg,#f6fdec,#ffffff); }
+.ob-head { display: flex; align-items: center; gap: 14px; margin-bottom: 14px; }
+.ob-badge { flex: 0 0 auto; width: 48px; height: 48px; border-radius: 12px; background: var(--lime); display: grid; place-items: center; font-size: 26px; }
+.ob-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.ob-card { border: 1px solid var(--line); border-radius: 12px; padding: 16px; background: #fff; }
+.ob-card b { display: block; margin-bottom: 6px; }
+@media (max-width: 720px) { .ob-grid { grid-template-columns: 1fr; } }
 .builder-card { border: 1px solid #d7e6c2; background: linear-gradient(180deg,#fbfff5,#ffffff); }
 .builder-table select, .builder-table input { width: 100%; margin: 0; }
 .builder-table th { font-size: 12px; }

@@ -317,40 +317,37 @@ def run():
 
     # --- partidas de coste (subpartidas dentro del proyecto) -------------
     conn = db.connect()
-    db.upsert_partida(conn, "PROD", "Costes de producción", orden=1)
+    pa_prod = db.upsert_partida(conn, "PRODT", "Coste de producción tomate", orden=9)
     pdid = db.insert_documento(conn, tipo="factura", numero="PART1", importe=500,
                                fecha="2026-06-01", concepto="postura tomate")
     conn.commit(); conn.close()
     # detecta "en la partida X" en el texto y la aplica al guardar
     r = client.post(f"/documentos/{pdid}/reparto/previsualizar",
-                    json={"texto": "todo a PROD-TOM en la partida costes de producción"})
+                    json={"texto": "todo a PROD-TOM en la partida coste de producción tomate"})
     dj = r.get_json()
-    assert dj["ok"] and dj.get("partida") and dj["partida"]["codigo"] == "PROD"
+    assert dj["ok"] and dj.get("partida") and dj["partida"]["codigo"] == "PRODT"
     client.post(f"/documentos/{pdid}/reparto/guardar",
-                data={"texto": "todo a PROD-TOM en la partida costes de producción"},
+                data={"texto": "todo a PROD-TOM en la partida coste de producción tomate"},
                 follow_redirects=True)
     conn = db.connect()
     reps = db.get_repartos(conn, pdid)
-    porpart = {x["codigo"]: x["imputado"] for x in db.imputado_por_partida(conn)}
+    porpart = {x["partida_id"]: x["imputado"] for x in db.imputado_por_partida(conn)}
     conn.close()
-    assert reps and reps[0]["partida_id"], "el reparto no guardó la partida"
-    assert abs(porpart.get("PROD", 0) - 500) < 0.01, "no imputó a la partida"
+    assert reps and reps[0]["partida_id"] == pa_prod, "el reparto no guardó la partida"
+    assert abs(porpart.get(pa_prod, 0) - 500) < 0.01, "no imputó a la partida"
     assert client.get("/partidas").status_code == 200
     assert b"Resumen por partida" in client.get("/informe").data
     print("  ok  partidas: 'en la partida X' + informe por partida"); ok += 1
 
     # presupuesto por partida + seguimiento con semáforo
-    conn = db.connect()
-    pa_id = db.list_partidas(conn)[0]["id"]
-    proj_id = [p["id"] for p in db.list_proyectos(conn) if p["codigo"] == "PROD-TOM"][0]
-    conn.close()
+    proj_id = [p["id"] for p in db.list_proyectos(db.connect()) if p["codigo"] == "PROD-TOM"][0]
     client.post("/presupuestos/partida/guardar",
                 data={"ejercicio": "2026", "proyecto_id": proj_id,
-                      "partida_id": pa_id, "importe": "400"}, follow_redirects=True)
+                      "partida_id": pa_prod, "importe": "400"}, follow_redirects=True)
     conn = db.connect()
     seg = {(s["proyecto_id"], s["partida_id"]): s for s in db.seguimiento_partidas(conn, 2026)}
     conn.close()
-    fila = seg.get((proj_id, pa_id))
+    fila = seg.get((proj_id, pa_prod))
     assert fila and abs(fila["presupuesto"] - 400) < 0.01
     assert fila["estado"] == "excedido", "500 imputado sobre 400 debería estar excedido"
     assert b"Presupuesto por partida" in client.get("/presupuestos?ejercicio=2026").data
@@ -359,22 +356,42 @@ def run():
     # partida distinta por línea (por proyecto) en el mismo reparto
     conn = db.connect()
     db.upsert_partida(conn, "ENV", "Envases")
+    db.upsert_partida(conn, "EMB", "Embalaje")
     db.upsert_proyecto(conn, "PL-X", "Proyecto Equis")
     db.upsert_proyecto(conn, "PL-T", "Proyecto Te")
     pld = db.insert_documento(conn, tipo="factura", numero="PL1", importe=1000,
                               fecha="2026-07-01", concepto="z")
     conn.commit(); conn.close()
-    txt = "60% PL-X en la partida envases, 40% PL-T en la partida costes de producción"
+    txt = "60% PL-X en la partida envases, 40% PL-T en la partida embalaje"
     dj = client.post(f"/documentos/{pld}/reparto/previsualizar", json={"texto": txt}).get_json()
     assert dj["partidas_por_linea"] is True
     porl = {l["proyecto"]: l["partida"] for l in dj["lineas"]}
-    assert porl.get("PL-X") == "Envases" and porl.get("PL-T") == "Costes de producción"
+    assert porl.get("PL-X") == "Envases" and porl.get("PL-T") == "Embalaje"
     client.post(f"/documentos/{pld}/reparto/guardar", data={"texto": txt}, follow_redirects=True)
     conn = db.connect()
     reps = {r["proyecto_codigo"]: r["partida_id"] for r in db.get_repartos(conn, pld)}
     conn.close()
     assert reps["PL-X"] != reps["PL-T"] and reps["PL-X"] and reps["PL-T"], "cada línea debe tener su partida"
     print("  ok  partida distinta por línea (por proyecto)"); ok += 1
+
+    # onboarding: con datos, no aparece; cargar ejemplo está bloqueado
+    assert b"Bienvenido a CostControl" not in client.get("/").data
+    r = client.post("/ejemplo/cargar", follow_redirects=True)
+    assert "una cuenta vacía".encode() in r.data
+    print("  ok  onboarding no aparece con datos; ejemplo bloqueado"); ok += 1
+
+    # deshacer reparto en bloque
+    conn = db.connect()
+    rep_ids = [str(d["id"]) for d in db.list_documentos(conn, estado="repartido")][:2]
+    conn.close()
+    assert rep_ids, "debería haber documentos repartidos"
+    r = client.post("/reparto-masivo/quitar", data={"doc_ids": rep_ids}, follow_redirects=True)
+    assert "Reparto quitado".encode() in r.data
+    conn = db.connect()
+    aun = {str(d["id"]) for d in db.list_documentos(conn, estado="repartido")}
+    conn.close()
+    assert not (set(rep_ids) & aun), "los documentos deberían haber vuelto a pendiente"
+    print("  ok  deshacer reparto en bloque"); ok += 1
 
     print(f"\nTODO OK ({ok} comprobaciones)")
 

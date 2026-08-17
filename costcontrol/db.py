@@ -640,11 +640,13 @@ def resumen_por_centro(conn) -> List[Dict[str, Any]]:
 
 def detalle_proyecto(conn, proyecto_id: int) -> List[Dict[str, Any]]:
     return rows_to_dicts(conn.execute(
-        """SELECT r.importe, r.porcentaje, r.base,
+        """SELECT r.importe, r.porcentaje, r.base, d.id AS documento_id,
                   d.numero, d.fecha, d.tercero, d.concepto, d.tipo, d.importe AS doc_importe,
-                  ce.codigo AS centro_codigo
+                  ce.codigo AS centro_codigo,
+                  pa.codigo AS partida_codigo, pa.nombre AS partida_nombre
            FROM repartos r JOIN documentos d ON d.id = r.documento_id
            LEFT JOIN centros ce ON ce.id = d.centro_id
+           LEFT JOIN partidas pa ON pa.id = r.partida_id
            WHERE r.proyecto_id=? ORDER BY d.fecha DESC, r.id DESC""",
         (proyecto_id,)).fetchall())
 

@@ -19,6 +19,37 @@
   {% endif %}
 </div>
 
+{% if vacio %}
+<div class="card onboarding">
+  <div class="ob-head">
+    <span class="ob-badge">👋</span>
+    <div>
+      <h2 style="margin:0">Bienvenido a CostControl</h2>
+      <p class="small muted" style="margin:4px 0 0">Tu cuenta está vacía. Empieza en 1 minuto de una de estas dos formas:</p>
+    </div>
+  </div>
+  <div class="ob-grid">
+    <div class="ob-card">
+      <b>🚀 Probar con datos de ejemplo</b>
+      <p class="small muted">Carga proyectos, documentos, partidas y repartos ya hechos para ver cómo funciona todo. Podrás borrarlos luego.</p>
+      <form method="post" action="{{ url_for('ejemplo_cargar') }}">
+        <button class="btn accent" onclick="return confirm('¿Cargar datos de ejemplo en esta cuenta?')">Cargar datos de ejemplo</button>
+      </form>
+    </div>
+    <div class="ob-card">
+      <b>🏗️ Empezar con lo mío</b>
+      <p class="small muted">Crea tu estructura y carga tus documentos reales.</p>
+      <ol class="small" style="margin:6px 0 10px; padding-left:18px; line-height:1.8">
+        <li>Crea <a href="{{ url_for('proyectos') }}">proyectos</a> y <a href="{{ url_for('centros') }}">centros</a> (o impórtalos).</li>
+        <li><a href="{{ url_for('importar') }}">Importa tus facturas/albaranes</a> desde Excel.</li>
+        <li>Reparte y consulta el <a href="{{ url_for('informe') }}">informe</a>.</li>
+      </ol>
+      <a href="{{ url_for('importar') }}" class="btn sec">Importar desde Excel</a>
+    </div>
+  </div>
+</div>
+{% endif %}
+
 {% set rep_pct = ((tot.total - tot.pendiente) / tot.total * 100) if tot.total else 0 %}
 <div class="grid kpi">
   <div class="kpi-card">

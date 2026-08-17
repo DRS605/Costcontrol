@@ -96,6 +96,11 @@ herramienta traduce ese texto libre a líneas analíticas concretas.
   vivo (puedes traer al editor lo que traduce el texto y afinarlo a mano).
 - 📎 **Adjuntar la factura/albarán** (PDF o imagen) a cada documento.
 - 🚫 **Detección de duplicados** al importar (mismo número e importe).
+- 🧭 **Trazabilidad**: en el informe, cada línea imputada a un proyecto muestra su
+  **partida** y enlaza al **documento de origen**. Y puedes **deshacer repartos en
+  bloque** desde el reparto masivo (vuelven a pendiente).
+- 🚀 **Onboarding**: una cuenta vacía ofrece **cargar datos de ejemplo** con un clic
+  (proyectos, documentos, partidas y repartos) o empezar con lo tuyo importando Excel.
 - 💾 **Copia de seguridad** completa en JSON, con **restauración**.
 - 🔒 **Acceso por contraseña opcional** con pantalla de login de marca.
 - 🏢 **Modo multiusuario / multi-empresa** (para vender como servicio): cada

@@ -116,6 +116,9 @@
     <div class="warnbox" style="margin-top:12px">Se aplicará la <b>misma regla</b> a cada documento seleccionado (cada uno con su propio importe). Los repartos anteriores de esos documentos se sustituyen.</div>
     <div class="actions" style="margin-top:14px">
       <button class="btn accent" type="submit" onclick="return confirm('¿Aplicar el reparto a los documentos seleccionados?')">Aplicar reparto masivo</button>
+      <button class="btn sec" type="submit" formaction="{{ url_for('reparto_masivo_quitar') }}" formnovalidate
+              onclick="return confirm('¿Quitar el reparto de los documentos seleccionados? Volverán a pendiente.')">
+        ↩ Quitar reparto de los seleccionados</button>
     </div>
   </div>
   {% endif %}

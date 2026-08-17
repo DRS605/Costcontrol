@@ -3,9 +3,13 @@
 from costcontrol import db
 
 
-def seed():
-    db.init_db()
-    conn = db.connect()
+def seed(conn=None):
+    """Carga datos de demostración. Si se pasa `conn`, siembra en esa base de
+    datos (útil en modo multiempresa); si no, usa la BD por defecto."""
+    own = conn is None
+    if own:
+        db.init_db()
+        conn = db.connect()
 
     # Proyectos con drivers para reparto ponderado
     p1 = db.upsert_proyecto(conn, "PROY-A", "Reforma Nave Norte", presupuesto=150000,
@@ -14,6 +18,11 @@ def seed():
                             drivers={"superficie": 200, "horas": 600})
     p3 = db.upsert_proyecto(conn, "PROY-C", "Mantenimiento General", presupuesto=40000,
                             drivers={"superficie": 100, "horas": 300})
+
+    # Partidas de coste (subpartidas dentro de los proyectos)
+    pa_prod = db.upsert_partida(conn, "PROD", "Producción", orden=1)
+    pa_pers = db.upsert_partida(conn, "PERS", "Personal", orden=2)
+    db.upsert_partida(conn, "ESTR", "Estructura", orden=3)
 
     # Centros de coste / beneficio (CC-ESTRUCTURA con regla de reparto por defecto)
     obras = db.upsert_centro(conn, "CC-OBRAS", "Obras y ejecución", "coste")
@@ -59,10 +68,26 @@ def seed():
              tercero="Cementos del Turia", tercero_id=t3, concepto="Hormigón",
              importe=6100.00, iva_pct=21, cuenta_id=c600, centro_id=obras),
     ]
-    for d in docs:
-        db.insert_documento(conn, estado="pendiente", **d)
+    dids = [db.insert_documento(conn, estado="pendiente", **d) for d in docs]
 
-    conn.close()
+    # Un par de repartos ya hechos (para que el informe y la trazabilidad
+    # muestren algo desde el primer momento)
+    cod2id = {p["codigo"]: p["id"] for p in db.list_proyectos(conn)}
+    db.replace_repartos(conn, dids[0], [
+        {"proyecto_id": cod2id["PROY-A"], "proyecto_codigo": "PROY-A", "importe": 2178.30,
+         "porcentaje": 60, "base": "60% PROY-A · demo", "partida_id": pa_prod},
+        {"proyecto_id": cod2id["PROY-B"], "proyecto_codigo": "PROY-B", "importe": 1452.20,
+         "porcentaje": 40, "base": "40% PROY-B · demo", "partida_id": pa_prod},
+    ])
+    db.replace_repartos(conn, dids[2], [
+        {"proyecto_id": cod2id["PROY-A"], "proyecto_codigo": "PROY-A", "importe": 8333.33,
+         "porcentaje": 66.67, "base": "según superficie · demo", "partida_id": pa_pers},
+        {"proyecto_id": cod2id["PROY-B"], "proyecto_codigo": "PROY-B", "importe": 4166.67,
+         "porcentaje": 33.33, "base": "según superficie · demo", "partida_id": pa_pers},
+    ])
+
+    if own:
+        conn.close()
     return {"proyectos": 3, "documentos": len(docs)}
 
 
