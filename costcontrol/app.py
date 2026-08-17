@@ -479,6 +479,18 @@ def ejemplo_cargar():
     return redirect(url_for("index"))
 
 
+@app.route("/ayuda")
+def ayuda():
+    conn = get_conn()
+    ejemplos = {
+        "proyectos": [p["codigo"] for p in db.list_proyectos(conn, solo_activos=True)][:3],
+        "partidas": [(p["nombre"] or p["codigo"]) for p in db.list_partidas(conn, solo_activas=True)][:2],
+        "reglas": [r["nombre"] for r in db.list_reglas(conn)][:2],
+    }
+    conn.close()
+    return render_template("ayuda.html", ej=ejemplos)
+
+
 @app.route("/ajustes")
 def ajustes():
     equipo = None

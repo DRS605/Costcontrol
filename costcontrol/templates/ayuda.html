@@ -1,0 +1,97 @@
+{% extends "base.html" %}
+{% block title %}Ayuda · CostControl{% endblock %}
+{% block body %}
+{% set P = ej.proyectos or ['PROY-A','PROY-B','PROY-C'] %}
+{% set A = P[0] if P else 'PROY-A' %}
+{% set B = P[1] if P|length>1 else 'PROY-B' %}
+{% set C = P[2] if P|length>2 else 'PROY-C' %}
+{% set PA = ej.partidas[0] if ej.partidas else 'envases' %}
+{% set PA2 = ej.partidas[1] if ej.partidas|length>1 else 'embalaje' %}
+
+<div class="actions" style="justify-content:space-between; align-items:flex-end">
+  <div>
+    <h1>Ayuda · chuleta de reparto</h1>
+    <p class="subtitle">Todo lo que puedes escribir para repartir, filtrar e imputar. Escríbelo como lo dirías.</p>
+  </div>
+  <button class="btn sec" onclick="window.print()">🖨️ Imprimir</button>
+</div>
+
+<div class="grid cols2">
+  <div class="card">
+    <h2>Formas de repartir</h2>
+    <table class="ayuda-t">
+      <tbody>
+        <tr><td><code>60% {{ A }}, 40% {{ B }}</code></td><td>por porcentajes</td></tr>
+        <tr><td><code>a partes iguales entre {{ A }}, {{ B }}, {{ C }}</code></td><td>a partes iguales</td></tr>
+        <tr><td><code>mitad y mitad</code> · <code>a medias</code></td><td>iguales (coloquial)</td></tr>
+        <tr><td><code>todo a {{ A }}</code> · <code>100% {{ A }}</code></td><td>todo a uno</td></tr>
+        <tr><td><code>1.500 € a {{ A }} y el resto a {{ B }}</code></td><td>importe fijo + resto</td></tr>
+        <tr><td><code>la mitad a {{ A }}, un tercio a {{ B }}</code></td><td>fracciones en palabras</td></tr>
+        <tr><td><code>60% a {{ A }}, el resto a los demás</code></td><td>el resto entre los no asignados</td></tr>
+        <tr><td><code>20% a cada uno</code> · <code>300 € a cada proyecto</code></td><td>misma cifra a cada uno</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="card">
+    <h2>Repartos ponderados</h2>
+    <table class="ayuda-t">
+      <tbody>
+        <tr><td><code>por m2: {{ A }} 100, {{ B }} 300</code></td><td>pesos explícitos</td></tr>
+        <tr><td><code>el doble a {{ A }} que a {{ B }}</code></td><td>pesos relativos (2:1)</td></tr>
+        <tr><td><code>según superficie</code> · <code>proporcional a horas</code></td><td>por un <i>driver</i> del proyecto</td></tr>
+        <tr><td><code>según el gasto de cada proyecto</code></td><td>por el gasto ya imputado</td></tr>
+        <tr><td><code>… de los proyectos que contengan finca</code></td><td>limita a proyectos por palabra</td></tr>
+      </tbody>
+    </table>
+    <h2 style="margin-top:18px">Reglas guardadas</h2>
+    <table class="ayuda-t">
+      <tbody>
+        <tr><td><code>como la regla {{ ej.reglas[0] if ej.reglas else 'NOMBRE' }}</code></td><td>reutiliza una regla</td></tr>
+        <tr><td><code>según la regla NOMBRE, solo {{ A }} y {{ B }}</code></td><td>reescala a un subconjunto</td></tr>
+        <tr><td><code>50% como la regla NOMBRE, resto a {{ C }}</code></td><td>combina regla + reparto</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="card">
+    <h2>Partidas de coste</h2>
+    <table class="ayuda-t">
+      <tbody>
+        <tr><td><code>60% {{ A }}, 40% {{ B }} en la partida {{ PA }}</code></td><td>una partida para todo</td></tr>
+        <tr><td><code>60% {{ A }} en la partida {{ PA }}, 40% {{ B }} en la partida {{ PA2 }}</code></td><td>una partida <b>por línea</b></td></tr>
+      </tbody>
+    </table>
+    <p class="small muted" style="margin-top:8px">Las partidas se crean en <a href="{{ url_for('partidas') }}">Maestros → Partidas</a>. Se reconocen por nombre o código (sin acentos ni mayúsculas).</p>
+  </div>
+
+  <div class="card">
+    <h2>Filtrar y repartir en bloque</h2>
+    <ul class="small" style="line-height:1.9; padding-left:18px">
+      <li><b>Buscar por texto con «o»:</b> en Documentos o Reparto masivo, <code>finca o postura tomate</code> encuentra los que contengan cualquiera de los dos (en nº, proveedor o concepto).</li>
+      <li><b>Adjudicar en bloque:</b> filtra → selecciona → <code>todo a {{ A }}</code> (opcionalmente <code>en la partida {{ PA }}</code>).</li>
+      <li><b>Deshacer en bloque:</b> «↩ Quitar reparto de los seleccionados» en Reparto masivo (vuelven a pendiente).</li>
+      <li><b>Constructor guiado 🧩:</b> si no quieres escribir códigos, arma el reparto con desplegables (proyecto, partida, %/€/resto).</li>
+    </ul>
+  </div>
+</div>
+
+<div class="card">
+  <h2>Trucos y flujo</h2>
+  <div class="grid cols2">
+    <ul class="small" style="line-height:1.9; padding-left:18px">
+      <li><b>Previsualiza siempre:</b> «Traducir / previsualizar» te muestra a qué proyecto y partida va cada euro antes de guardar.</li>
+      <li><b>Ajuste manual:</b> para cuadrar céntimos exactos, edita importe por proyecto a mano.</li>
+      <li><b>Regla por defecto por centro:</b> asigna un texto de reparto a un centro y todo lo que importes de él se reparte solo.</li>
+      <li><b>Plantillas (Reglas):</b> guarda tus repartos frecuentes y reutilízalos por nombre.</li>
+    </ul>
+    <ul class="small" style="line-height:1.9; padding-left:18px">
+      <li><b>Presupuestos + semáforo:</b> por proyecto, centro y partida (verde ≤85%, ámbar ≤100%, rojo &gt;100%).</li>
+      <li><b>Trazabilidad:</b> en el Informe, cada línea enlaza a su documento de origen.</li>
+      <li><b>Cierre de periodo:</b> bloquea un mes para que no se toque.</li>
+      <li><b>Copia de seguridad:</b> descarga/restaura todo en JSON desde Ajustes o el Informe.</li>
+      <li><b>IA opcional ✨:</b> con ella entiende frases libres; sin ella, todo esto funciona en local.</li>
+    </ul>
+  </div>
+</div>
+{% endblock %}
