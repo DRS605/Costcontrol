@@ -114,6 +114,25 @@ CREATE TABLE IF NOT EXISTS cierres (
     cerrado_el TEXT DEFAULT (datetime('now')),
     PRIMARY KEY (ejercicio, periodo)
 );
+
+-- partidas de coste (subpartidas dentro de un proyecto): producción, personal…
+CREATE TABLE IF NOT EXISTS partidas (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    codigo TEXT NOT NULL,
+    nombre TEXT NOT NULL DEFAULT '',
+    orden INTEGER NOT NULL DEFAULT 0,
+    activo INTEGER NOT NULL DEFAULT 1
+);
+
+-- presupuesto por proyecto y partida (anual; periodo 0 = anual)
+CREATE TABLE IF NOT EXISTS presupuestos_partida (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    proyecto_id INTEGER NOT NULL REFERENCES proyectos(id) ON DELETE CASCADE,
+    partida_id INTEGER NOT NULL REFERENCES partidas(id) ON DELETE CASCADE,
+    ejercicio INTEGER NOT NULL,
+    importe REAL NOT NULL DEFAULT 0,
+    UNIQUE(proyecto_id, partida_id, ejercicio)
+);
 """
 
 
@@ -132,6 +151,7 @@ def connect(path: Optional[str] = None) -> sqlite3.Connection:
 # Columnas añadidas después de la primera versión: {tabla: [(col, definición)]}
 _MIGRATIONS = {
     "centros": [("regla_defecto", "TEXT NOT NULL DEFAULT ''")],
+    "repartos": [("partida_id", "INTEGER REFERENCES partidas(id) ON DELETE SET NULL")],
     "documentos": [
         ("tercero_id", "INTEGER"),
         ("iva_pct", "REAL NOT NULL DEFAULT 0"),
@@ -181,6 +201,12 @@ def init_db(path: Optional[str] = None) -> None:
 
 def rows_to_dicts(rows) -> List[Dict[str, Any]]:
     return [dict(r) for r in rows]
+
+
+def _sin_acentos(s: str) -> str:
+    import unicodedata
+    return "".join(c for c in unicodedata.normalize("NFD", s or "")
+                   if unicodedata.category(c) != "Mn")
 
 
 # --- Proyectos ------------------------------------------------------------
@@ -457,12 +483,102 @@ def replace_repartos(conn, documento_id: int, lines: List[Dict[str, Any]]) -> No
         for l in lines:
             conn.execute(
                 """INSERT INTO repartos (documento_id, proyecto_id, proyecto_codigo,
-                   importe, porcentaje, base) VALUES (?,?,?,?,?,?)""",
+                   importe, porcentaje, base, partida_id) VALUES (?,?,?,?,?,?,?)""",
                 (documento_id, l.get("proyecto_id"), l.get("proyecto_codigo", ""),
-                 float(l.get("importe", 0)), float(l.get("porcentaje", 0)), l.get("base", "")),
+                 float(l.get("importe", 0)), float(l.get("porcentaje", 0)),
+                 l.get("base", ""), l.get("partida_id")),
             )
         estado = "repartido" if lines else "pendiente"
         conn.execute("UPDATE documentos SET estado=? WHERE id=?", (estado, documento_id))
+
+
+# --- Partidas de coste (subpartidas de proyecto) --------------------------
+def list_partidas(conn, solo_activas=False) -> List[Dict[str, Any]]:
+    q = "SELECT * FROM partidas"
+    if solo_activas:
+        q += " WHERE activo=1"
+    q += " ORDER BY orden, codigo"
+    return rows_to_dicts(conn.execute(q).fetchall())
+
+
+def get_partida(conn, pid: int) -> Optional[Dict[str, Any]]:
+    r = conn.execute("SELECT * FROM partidas WHERE id=?", (pid,)).fetchone()
+    return dict(r) if r else None
+
+
+def buscar_partida(conn, texto: str) -> Optional[Dict[str, Any]]:
+    """Encuentra una partida por código o nombre (aprox., sin acentos/mayúsc.)."""
+    t = _sin_acentos((texto or "").strip().lower())
+    if not t:
+        return None
+    for p in list_partidas(conn, solo_activas=True):
+        if _sin_acentos(p["codigo"].lower()) == t or _sin_acentos((p["nombre"] or "").lower()) == t:
+            return p
+    for p in list_partidas(conn, solo_activas=True):
+        if t in _sin_acentos((p["nombre"] or p["codigo"]).lower()):
+            return p
+    return None
+
+
+def upsert_partida(conn, codigo, nombre="", orden=0, activo=1, pid=None) -> int:
+    with conn:
+        if pid:
+            conn.execute("UPDATE partidas SET codigo=?, nombre=?, orden=?, activo=? WHERE id=?",
+                         (codigo, nombre, int(orden or 0), 1 if activo else 0, pid))
+            return pid
+        cur = conn.execute("INSERT INTO partidas (codigo, nombre, orden, activo) VALUES (?,?,?,?)",
+                           (codigo, nombre, int(orden or 0), 1 if activo else 0))
+        return cur.lastrowid
+
+
+def delete_partida(conn, pid: int) -> None:
+    with conn:
+        conn.execute("DELETE FROM partidas WHERE id=?", (pid,))
+
+
+def imputado_por_partida(conn, ejercicio=None) -> List[Dict[str, Any]]:
+    """Importe imputado agrupado por partida (incluye 'sin partida')."""
+    q = ("SELECT pa.id AS partida_id, pa.codigo, pa.nombre, "
+         "COALESCE(SUM(r.importe),0) AS imputado, COUNT(r.id) AS n_lineas "
+         "FROM repartos r JOIN documentos d ON d.id=r.documento_id "
+         "LEFT JOIN partidas pa ON pa.id=r.partida_id WHERE 1=1")
+    params: List[Any] = []
+    if ejercicio:
+        q += " AND d.ejercicio=?"; params.append(int(ejercicio))
+    q += " GROUP BY pa.id ORDER BY imputado DESC"
+    return rows_to_dicts(conn.execute(q, params).fetchall())
+
+
+def imputado_proyecto_partida(conn, ejercicio=None) -> List[Dict[str, Any]]:
+    """Matriz proyecto × partida con el importe imputado y su presupuesto."""
+    q = ("SELECT p.id AS proyecto_id, p.codigo AS proyecto_codigo, p.nombre AS proyecto_nombre, "
+         "pa.id AS partida_id, pa.codigo AS partida_codigo, pa.nombre AS partida_nombre, "
+         "COALESCE(SUM(r.importe),0) AS imputado "
+         "FROM repartos r JOIN documentos d ON d.id=r.documento_id "
+         "JOIN proyectos p ON p.id=r.proyecto_id "
+         "LEFT JOIN partidas pa ON pa.id=r.partida_id WHERE 1=1")
+    params: List[Any] = []
+    if ejercicio:
+        q += " AND d.ejercicio=?"; params.append(int(ejercicio))
+    q += " GROUP BY p.id, pa.id ORDER BY p.codigo, pa.orden, pa.codigo"
+    filas = rows_to_dicts(conn.execute(q, params).fetchall())
+    # añade presupuesto por (proyecto, partida)
+    if ejercicio:
+        pres = {(r["proyecto_id"], r["partida_id"]): r["importe"] for r in rows_to_dicts(
+            conn.execute("SELECT proyecto_id, partida_id, importe FROM presupuestos_partida "
+                         "WHERE ejercicio=?", (int(ejercicio),)).fetchall())}
+        for f in filas:
+            f["presupuesto"] = float(pres.get((f["proyecto_id"], f["partida_id"]), 0) or 0)
+    return filas
+
+
+def set_presupuesto_partida(conn, proyecto_id, partida_id, ejercicio, importe) -> None:
+    with conn:
+        conn.execute(
+            "INSERT INTO presupuestos_partida (proyecto_id, partida_id, ejercicio, importe) "
+            "VALUES (?,?,?,?) ON CONFLICT(proyecto_id, partida_id, ejercicio) "
+            "DO UPDATE SET importe=excluded.importe",
+            (int(proyecto_id), int(partida_id), int(ejercicio), float(importe or 0)))
 
 
 # --- Informes -------------------------------------------------------------

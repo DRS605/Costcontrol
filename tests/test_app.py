@@ -315,6 +315,30 @@ def run():
     assert abs(total_tom - 700) < 0.01, f"esperado 700 imputado, fue {total_tom}"
     print("  ok  filtro de texto OR + reparto masivo por concepto"); ok += 1
 
+    # --- partidas de coste (subpartidas dentro del proyecto) -------------
+    conn = db.connect()
+    db.upsert_partida(conn, "PROD", "Costes de producción", orden=1)
+    pdid = db.insert_documento(conn, tipo="factura", numero="PART1", importe=500,
+                               fecha="2026-06-01", concepto="postura tomate")
+    conn.commit(); conn.close()
+    # detecta "en la partida X" en el texto y la aplica al guardar
+    r = client.post(f"/documentos/{pdid}/reparto/previsualizar",
+                    json={"texto": "todo a PROD-TOM en la partida costes de producción"})
+    dj = r.get_json()
+    assert dj["ok"] and dj.get("partida") and dj["partida"]["codigo"] == "PROD"
+    client.post(f"/documentos/{pdid}/reparto/guardar",
+                data={"texto": "todo a PROD-TOM en la partida costes de producción"},
+                follow_redirects=True)
+    conn = db.connect()
+    reps = db.get_repartos(conn, pdid)
+    porpart = {x["codigo"]: x["imputado"] for x in db.imputado_por_partida(conn)}
+    conn.close()
+    assert reps and reps[0]["partida_id"], "el reparto no guardó la partida"
+    assert abs(porpart.get("PROD", 0) - 500) < 0.01, "no imputó a la partida"
+    assert client.get("/partidas").status_code == 200
+    assert b"Resumen por partida" in client.get("/informe").data
+    print("  ok  partidas: 'en la partida X' + informe por partida"); ok += 1
+
     print(f"\nTODO OK ({ok} comprobaciones)")
 
 

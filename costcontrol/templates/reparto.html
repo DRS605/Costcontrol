@@ -50,6 +50,17 @@
         <span class="pill" data-fill="20% a cada uno">a cada uno</span>
       </div>
 
+      {% if partidas %}
+      <div style="margin-top:12px; max-width:340px">
+        <label>Partida (opcional)</label>
+        <select name="partida_id">
+          <option value="">— sin partida —</option>
+          {% for pa in partidas %}<option value="{{ pa.id }}">{{ pa.codigo }} · {{ pa.nombre }}</option>{% endfor %}
+        </select>
+        <p class="small muted" style="margin-top:4px">O escríbelo: <code>… en la partida {{ partidas[0].nombre or partidas[0].codigo }}</code>.</p>
+      </div>
+      {% endif %}
+
       <div class="actions" style="margin-top:14px">
         <button type="button" class="btn sec" id="btn-preview">Traducir / previsualizar</button>
         <button type="submit" class="btn accent">Guardar reparto</button>
@@ -194,6 +205,9 @@ function render(d){
     html += `<div class="iabox">✨ <b>La IA lo ha entendido</b> y lo ha traducido a: <code>${d.ia.reparto}</code>`
           + (d.ia.nota ? `<div class="small muted" style="margin-top:4px">${d.ia.nota}</div>` : '')
           + `</div>`;
+  }
+  if(d.partida){
+    html += `<div class="okbox">🏷️ Se imputará a la partida <b>${d.partida.codigo} · ${d.partida.nombre}</b>.</div>`;
   }
   if(d.lineas && d.lineas.length){
     html += '<table id="preview-lines" style="margin-top:14px"><thead><tr><th>Proyecto</th><th class="num">%</th><th class="num">Importe</th><th>Base</th></tr></thead><tbody>';

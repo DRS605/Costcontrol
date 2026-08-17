@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+{% block title %}Partidas · CostControl{% endblock %}
+{% block body %}
+<div class="actions">
+  <div>
+    <h1>Partidas de coste</h1>
+    <p class="subtitle">Subpartidas dentro de los proyectos (producción, personal, estructura…). Al repartir, puedes imputar a una partida y verlo en el informe.</p>
+  </div>
+</div>
+
+<div class="split">
+  <div class="card">
+    <h2>Partidas</h2>
+    {% if partidas %}
+    <div class="table-wrap">
+    <table>
+      <thead><tr><th>Código</th><th>Nombre</th><th class="num">Orden</th><th>Estado</th><th></th></tr></thead>
+      <tbody>
+      {% for p in partidas %}
+        <tr>
+          <td><b>{{ p.codigo }}</b></td>
+          <td>{{ p.nombre or '—' }}</td>
+          <td class="num">{{ p.orden }}</td>
+          <td>{% if p.activo %}<span class="badge b-ok">activa</span>{% else %}<span class="badge">inactiva</span>{% endif %}</td>
+          <td class="actions">
+            <button class="btn sec sm" onclick='editar({{ p|tojson }})'>Editar</button>
+            <form method="post" action="{{ url_for('partidas_borrar', pid=p.id) }}" onsubmit="return confirm('¿Eliminar la partida? Los repartos ya hechos quedarán sin partida.')" style="display:inline">
+              <button class="btn sec sm">Borrar</button>
+            </form>
+          </td>
+        </tr>
+      {% endfor %}
+      </tbody>
+    </table>
+    </div>
+    {% else %}
+    <div class="empty">Aún no hay partidas. Crea la primera (p. ej. <b>Costes de producción</b>).</div>
+    {% endif %}
+  </div>
+
+  <div class="card">
+    <h2 id="form-title">Nueva partida</h2>
+    <form method="post" action="{{ url_for('partidas_guardar') }}">
+      <input type="hidden" name="id" id="f-id">
+      <div><label>Código</label><input name="codigo" id="f-codigo" required placeholder="PROD"></div>
+      <div style="margin-top:10px"><label>Nombre</label><input name="nombre" id="f-nombre" placeholder="Costes de producción"></div>
+      <div style="margin-top:10px"><label>Orden (para ordenarlas)</label><input name="orden" id="f-orden" type="number" value="0"></div>
+      <label style="display:flex; align-items:center; gap:8px; margin-top:10px; cursor:pointer">
+        <input type="checkbox" name="activo" id="f-activo" checked style="width:auto"> Activa
+      </label>
+      <div class="actions" style="margin-top:14px">
+        <button class="btn accent" type="submit">Guardar</button>
+        <button class="btn sec" type="button" onclick="nuevo()">Limpiar</button>
+      </div>
+    </form>
+    <p class="small muted" style="margin-top:12px">Al repartir escribe <code>… en la partida costes de producción</code> o elige la partida en el desplegable. También en el <b>reparto masivo</b>.</p>
+  </div>
+</div>
+
+<script>
+function editar(p){
+  document.getElementById('f-id').value = p.id;
+  document.getElementById('f-codigo').value = p.codigo;
+  document.getElementById('f-nombre').value = p.nombre || '';
+  document.getElementById('f-orden').value = p.orden || 0;
+  document.getElementById('f-activo').checked = !!p.activo;
+  document.getElementById('form-title').textContent = 'Editar partida';
+  window.scrollTo({top:0, behavior:'smooth'});
+}
+function nuevo(){
+  document.getElementById('f-id').value = '';
+  document.querySelector('form').reset();
+  document.getElementById('form-title').textContent = 'Nueva partida';
+}
+</script>
+{% endblock %}

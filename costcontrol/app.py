@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 from decimal import Decimal
 
 from flask import (Flask, Response, abort, flash, g, redirect, render_template,
@@ -336,6 +337,30 @@ def _allocator(conn):
     """Crea un Allocator con los proyectos activos y las reglas guardadas."""
     rules = {r["nombre"]: r["texto"] for r in db.list_reglas(conn)}
     return Allocator(_projects_for_allocator(conn), rules=rules)
+
+
+_PARTIDA_RE = re.compile(
+    r"\b(?:en|a|de|para|bajo|con\s+cargo\s+a)\s+la\s+partida\s+(?:de\s+)?(.+?)"
+    r"(?=(?:\s+(?:del?|para\s+el|en\s+el|al)\s+proyecto\b)|[,.;]|$)", re.IGNORECASE)
+
+
+def _extraer_partida(conn, texto):
+    """Detecta 'en la partida X' en el texto de reparto.
+
+    Devuelve (partida_id, texto_sin_partida, partida_dict). Si no encuentra una
+    partida reconocida, devuelve (None, texto, None).
+    """
+    if not texto:
+        return None, texto, None
+    m = _PARTIDA_RE.search(texto)
+    if not m:
+        return None, texto, None
+    part = db.buscar_partida(conn, m.group(1).strip())
+    if not part:
+        return None, texto, None
+    limpio = (texto[:m.start()] + " " + texto[m.end():]).strip(" ,.;")
+    limpio = re.sub(r"\s{2,}", " ", limpio)
+    return part["id"], limpio, part
 
 
 def _interpretar(alloc, importe, texto):
@@ -760,11 +785,12 @@ def documento_reparto(did):
     proyectos_l = db.list_proyectos(conn, solo_activos=True)
     repartos = db.get_repartos(conn, did)
     reglas = db.rows_to_dicts(conn.execute("SELECT * FROM reglas ORDER BY nombre").fetchall())
+    partidas_l = db.list_partidas(conn, solo_activas=True)
     cerrado = _doc_bloqueado(conn, doc)
     conn.close()
     return render_template("reparto.html", doc=doc, proyectos=proyectos_l,
                            repartos=repartos, reglas=reglas, texto_previo="",
-                           cerrado=cerrado)
+                           partidas=partidas_l, cerrado=cerrado)
 
 
 @app.route("/documentos/<int:did>/reparto/previsualizar", methods=["POST"])
@@ -776,9 +802,10 @@ def reparto_previsualizar(did):
         conn.close()
         abort(404)
     alloc = _allocator(conn)
-    conn.close()
     texto = request.json.get("texto", "") if request.is_json else request.form.get("texto", "")
-    res = _interpretar(alloc, doc["importe"], texto)
+    partida_id, texto_split, partida = _extraer_partida(conn, texto)
+    conn.close()
+    res = _interpretar(alloc, doc["importe"], texto_split)
     return {
         "ok": res.ok,
         "criterio": res.criterio,
@@ -792,6 +819,8 @@ def reparto_previsualizar(did):
         "explicacion": res.explanation,
         "avisos": res.warnings,
         "ia": res.ia,
+        "partida": {"id": partida["id"], "codigo": partida["codigo"],
+                    "nombre": partida["nombre"]} if partida else None,
     }
 
 
@@ -808,7 +837,12 @@ def reparto_guardar(did):
         return redirect(url_for("documento_reparto", did=did))
     alloc = _allocator(conn)
     texto = request.form.get("texto", "")
-    res = _interpretar(alloc, doc["importe"], texto)
+    # partida: dropdown explícito o detectada en el texto ("en la partida X")
+    partida_id, texto_split, partida = _extraer_partida(conn, texto)
+    if request.form.get("partida_id"):
+        partida_id = int(request.form["partida_id"])
+        partida = db.get_partida(conn, partida_id)
+    res = _interpretar(alloc, doc["importe"], texto_split)
     if not res.ok:
         conn.close()
         flash("No se pudo interpretar el reparto: " + " ".join(res.warnings), "error")
@@ -825,10 +859,13 @@ def reparto_guardar(did):
         "importe": float(l.importe),
         "porcentaje": float(l.porcentaje),
         "base": f"{origen} · {l.base}",
+        "partida_id": partida_id,
     } for l in res.lines]
     db.replace_repartos(conn, did, lines)
     conn.close()
     extra = " (interpretado con IA)" if res.ia and res.ia.get("usada") else ""
+    if partida:
+        extra += f" · partida: {partida['nombre'] or partida['codigo']}"
     flash(f"Reparto guardado: {len(lines)} línea(s) analítica(s).{extra}", "ok")
     return redirect(url_for("documento_reparto", did=did))
 
@@ -920,6 +957,37 @@ def reglas_borrar(rid):
     return redirect(url_for("reglas"))
 
 
+# --- partidas de coste ----------------------------------------------------
+@app.route("/partidas")
+def partidas():
+    conn = get_conn()
+    data = db.list_partidas(conn)
+    conn.close()
+    return render_template("partidas.html", partidas=data)
+
+
+@app.route("/partidas/guardar", methods=["POST"])
+def partidas_guardar():
+    f = request.form
+    conn = get_conn()
+    db.upsert_partida(conn, f.get("codigo", "").strip() or "PART",
+                      f.get("nombre", "").strip(), orden=f.get("orden") or 0,
+                      activo=1 if f.get("activo") else 0,
+                      pid=int(f["id"]) if f.get("id") else None)
+    conn.close()
+    flash("Partida guardada.", "ok")
+    return redirect(url_for("partidas"))
+
+
+@app.route("/partidas/<int:pid>/borrar", methods=["POST"])
+def partidas_borrar(pid):
+    conn = get_conn()
+    db.delete_partida(conn, pid)
+    conn.close()
+    flash("Partida eliminada.", "ok")
+    return redirect(url_for("partidas"))
+
+
 # --- terceros -------------------------------------------------------------
 @app.route("/terceros")
 def terceros():
@@ -966,12 +1034,13 @@ def reparto_masivo():
     ejercicios_l = db.ejercicios(conn)
     proyectos_l = db.list_proyectos(conn, solo_activos=True)
     reglas_l = db.list_reglas(conn)
+    partidas_l = db.list_partidas(conn, solo_activas=True)
     conn.close()
     total = sum(d["importe"] or 0 for d in docs)
     return render_template("reparto_masivo.html", documentos=docs, centros=centros_l,
                            cuentas=cuentas_l, ejercicios=ejercicios_l, meses=MESES,
                            proyectos=proyectos_l, reglas=reglas_l, total=total,
-                           filtro=filtro_display)
+                           partidas=partidas_l, filtro=filtro_display)
 
 
 @app.route("/reparto-masivo/aplicar", methods=["POST"])
@@ -987,6 +1056,12 @@ def reparto_masivo_aplicar():
     cod2id = {p["codigo"]: p["id"] for p in db.list_proyectos(conn)}
     docs = db.list_documentos(conn, ids=ids)
     cerrados = db.cierres_set(conn)
+
+    # partida: dropdown explícito o detectada en el texto ("en la partida X")
+    partida_id, texto, partida = _extraer_partida(conn, texto)
+    if request.form.get("partida_id"):
+        partida_id = int(request.form["partida_id"])
+        partida = db.get_partida(conn, partida_id)
 
     # La misma frase se aplica a muchos documentos: si hace falta la IA, se
     # traduce UNA sola vez a la sintaxis canónica y luego se aplica a cada
@@ -1014,6 +1089,7 @@ def reparto_masivo_aplicar():
                 "importe": float(l.importe),
                 "porcentaje": float(l.porcentaje),
                 "base": f"[masivo] {origen} · {l.base}",
+                "partida_id": partida_id,
             } for l in res.lines]
             db.replace_repartos(conn, d["id"], lines)
             aplicados += 1
@@ -1021,6 +1097,8 @@ def reparto_masivo_aplicar():
             fallidos += 1
     conn.close()
     msg = f"Reparto masivo aplicado a {aplicados} documento(s)."
+    if partida:
+        msg += f" · partida: {partida['nombre'] or partida['codigo']}"
     if ia_usada:
         msg += " (interpretado con IA)"
     if fallidos:
@@ -1111,6 +1189,9 @@ def informe():
     por_proyecto = db.resumen_por_proyecto(conn)
     por_centro = db.resumen_por_centro(conn)
     por_cuenta = db.resumen_por_cuenta(conn)
+    por_partida = db.imputado_por_partida(conn)
+    hay_partidas = bool(db.list_partidas(conn))
+    matriz_pp = db.imputado_proyecto_partida(conn) if hay_partidas else []
     detalle = {}
     for p in por_proyecto:
         detalle[p["id"]] = db.detalle_proyecto(conn, p["id"])
@@ -1119,8 +1200,12 @@ def informe():
         [(p["codigo"], p["imputado"]) for p in por_proyecto if p["imputado"]][:10])
     graf_cuenta = charts.barras_horizontales(
         [(c["codigo"], c["importe"]) for c in por_cuenta if c["importe"]][:10])
+    graf_partida = charts.barras_horizontales(
+        [((p["codigo"] or "Sin partida"), p["imputado"]) for p in por_partida if p["imputado"]][:10])
     return render_template("informe.html", por_proyecto=por_proyecto,
                            por_centro=por_centro, por_cuenta=por_cuenta, detalle=detalle,
+                           por_partida=por_partida, matriz_pp=matriz_pp,
+                           hay_partidas=hay_partidas, graf_partida=graf_partida,
                            graf_proyecto=graf_proyecto, graf_cuenta=graf_cuenta)
 
 

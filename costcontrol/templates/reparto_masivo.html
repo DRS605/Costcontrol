@@ -101,6 +101,16 @@
       {% if proyectos|length>1 %}<span class="pill" data-fill="60% {{ proyectos[0].codigo }}, 40% {{ proyectos[1].codigo }}">60/40</span>{% endif %}
       {% for r in reglas %}<span class="pill" data-fill="{{ r.texto }}" title="{{ r.texto }}">{{ r.nombre }}</span>{% endfor %}
     </div>
+    {% if partidas %}
+    <div style="margin-top:12px; max-width:340px">
+      <label>Partida (opcional)</label>
+      <select name="partida_id">
+        <option value="">— sin partida —</option>
+        {% for pa in partidas %}<option value="{{ pa.id }}">{{ pa.codigo }} · {{ pa.nombre }}</option>{% endfor %}
+      </select>
+      <p class="small muted" style="margin-top:4px">O escríbelo en la regla: <code>… en la partida {{ partidas[0].nombre or partidas[0].codigo }}</code>.</p>
+    </div>
+    {% endif %}
     <div class="warnbox" style="margin-top:12px">Se aplicará la <b>misma regla</b> a cada documento seleccionado (cada uno con su propio importe). Los repartos anteriores de esos documentos se sustituyen.</div>
     <div class="actions" style="margin-top:14px">
       <button class="btn accent" type="submit" onclick="return confirm('¿Aplicar el reparto a los documentos seleccionados?')">Aplicar reparto masivo</button>

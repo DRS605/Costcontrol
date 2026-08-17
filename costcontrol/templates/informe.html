@@ -134,4 +134,58 @@
   <div class="empty">Sin cuentas con documentos.</div>
   {% endif %}
 </div>
+
+{% if hay_partidas %}
+<div class="card chart-card">
+  <h2>Imputado por partida</h2>
+  {{ graf_partida | safe }}
+</div>
+
+<div class="card">
+  <h2>Resumen por partida de coste</h2>
+  {% if por_partida %}
+  <div class="table-wrap">
+  <table>
+    <thead><tr><th>Código</th><th>Partida</th><th class="num">Imputado</th><th class="num">Líneas</th></tr></thead>
+    <tbody>
+    {% for p in por_partida %}
+      <tr>
+        <td><b>{{ p.codigo or '—' }}</b></td>
+        <td>{{ p.nombre or 'Sin partida' }}</td>
+        <td class="num">{{ p.imputado | eur }}</td>
+        <td class="num">{{ p.n_lineas }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% else %}
+  <div class="empty">Aún no hay repartos con partida.</div>
+  {% endif %}
+</div>
+
+{% if matriz_pp %}
+<div class="card">
+  <h2>Proyecto × partida</h2>
+  <div class="table-wrap">
+  <table>
+    <thead><tr><th>Proyecto</th><th>Partida</th><th class="num">Presupuesto</th><th class="num">Imputado</th><th class="num">Desviación</th></tr></thead>
+    <tbody>
+    {% for r in matriz_pp %}
+      {% set pres = r.presupuesto if r.presupuesto is defined else 0 %}
+      <tr>
+        <td><b>{{ r.proyecto_codigo }}</b> <span class="small muted">{{ r.proyecto_nombre }}</span></td>
+        <td>{{ r.partida_nombre or r.partida_codigo or 'Sin partida' }}</td>
+        <td class="num">{{ pres | eur if pres else '—' }}</td>
+        <td class="num">{{ r.imputado | eur }}</td>
+        <td class="num">{% if pres %}<span style="color:{{ '#b3261e' if r.imputado > pres else '#4f9a10' }}">{{ (pres - r.imputado) | eur }}</span>{% else %}—{% endif %}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  <p class="small muted" style="margin-top:8px">El presupuesto por partida se define por proyecto y ejercicio (próximamente editable desde Presupuestos).</p>
+</div>
+{% endif %}
+{% endif %}
 {% endblock %}

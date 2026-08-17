@@ -14,8 +14,12 @@ herramienta traduce ese texto libre a líneas analíticas concretas.
 - 📥 **Importación por Excel** de facturas / albaranes / apuntes contables, con
   detección automática de columnas (acepta sinónimos, acentos y mayúsculas).
   Las cuentas y centros que no existan se crean solos.
-- 🏗️ **Estructura de gasto**: proyectos, centros de coste/beneficio y cuentas
-  contables.
+- 🏗️ **Estructura de gasto**: proyectos, centros de coste/beneficio, cuentas
+  contables y **partidas de coste** (subpartidas dentro del proyecto:
+  producción, personal, estructura…).
+- 🏷️ **Imputación por partida**: al repartir puedes imputar a una partida —
+  eligiéndola en el desplegable o escribiéndolo (`… en la partida costes de
+  producción`) — y ver el **informe por partida** y la matriz **proyecto × partida**.
 - ✍️ **Reparto analítico en lenguaje natural**: escribes *cómo* quieres repartir
   y CostControl lo traduce. Ejemplos que entiende:
 
