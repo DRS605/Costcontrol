@@ -68,7 +68,11 @@ herramienta traduce ese texto libre a líneas analíticas concretas.
   por proyecto (presupuesto vs. imputado, desviación, detalle de líneas), por
   centro y **por cuenta contable**, exportable a Excel.
 - 🔎 **Búsqueda y filtros avanzados** en documentos (texto, fechas, importe,
-  ejercicio/periodo, centro, cuenta) y **exportación** de la vista filtrada.
+  ejercicio/periodo, centro, cuenta) y **exportación** de la vista filtrada. La
+  búsqueda de texto (en nº, proveedor y concepto) admite **varios términos con
+  «o»** — p. ej. `finca o postura tomate` casa cualquiera de los dos — y está
+  disponible también en el **reparto masivo** para seleccionar documentos por su
+  concepto y adjudicarlos en bloque a un proyecto (`todo a PROYECTO`).
 - 🎯 **Presupuestos por proyecto y por centro**, por periodo (mensual; el anual
   es la suma), con **seguimiento y alertas de desviación** (semáforo
   verde/ámbar/rojo) en la página de presupuestos y en el panel. El de proyecto

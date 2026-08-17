@@ -288,6 +288,33 @@ def run():
     assert d["ok"] and d.get("ia") is None, "el reparto local debe funcionar sin IA"
     print("  ok  reparto local sin IA (pesos relativos)"); ok += 1
 
+    # --- filtro de texto OR + reparto masivo por concepto ----------------
+    conn = db.connect()
+    db.upsert_proyecto(conn, "PROD-TOM", "Producción Tomate")
+    for num, imp_, con in [("BULK1", 100, "Riego finca norte"),
+                           ("BULK2", 200, "Compra postura tomate"),
+                           ("BULK3", 300, "Material oficina"),
+                           ("BULK4", 400, "Abono finca sur")]:
+        db.insert_documento(conn, tipo="factura", numero=num, importe=imp_,
+                            fecha="2026-05-05", concepto=con)
+    conn.commit(); conn.close()
+    import re as _re
+    r = client.get("/reparto-masivo?estado=&texto=finca o postura tomate")
+    ids_pg = set(_re.findall(r'name="doc_ids" value="(\d+)"', r.get_data(as_text=True)))
+    conn = db.connect()
+    mios = {str(d["id"]) for d in db.list_documentos(conn, texto="finca o postura tomate")
+            if d["numero"].startswith("BULK")}
+    conn.close()
+    assert len(mios) == 3 and mios <= ids_pg, "el filtro OR de texto no devolvió 3 documentos"
+    client.post("/reparto-masivo/aplicar",
+                data={"doc_ids": list(mios), "texto": "todo a PROD-TOM"}, follow_redirects=True)
+    conn = db.connect()
+    pid = [p["id"] for p in db.list_proyectos(conn) if p["codigo"] == "PROD-TOM"][0]
+    total_tom = db.imputado_por_proyecto(conn).get(pid, 0)
+    conn.close()
+    assert abs(total_tom - 700) < 0.01, f"esperado 700 imputado, fue {total_tom}"
+    print("  ok  filtro de texto OR + reparto masivo por concepto"); ok += 1
+
     print(f"\nTODO OK ({ok} comprobaciones)")
 
 

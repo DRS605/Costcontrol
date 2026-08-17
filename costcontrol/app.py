@@ -956,7 +956,7 @@ def reparto_masivo():
     conn = get_conn()
     filtros = _doc_filtros()
     filtro_display = {k: (request.args.get(k) or "") for k in
-                      ["estado", "centro", "tipo", "cuenta", "ejercicio", "periodo"]}
+                      ["estado", "centro", "tipo", "cuenta", "ejercicio", "periodo", "texto"]}
     if not any(filtros.values()):
         filtros["estado"] = "pendiente"
         filtro_display["estado"] = "pendiente"

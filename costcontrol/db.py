@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import sqlite3
 from decimal import Decimal
 from typing import Any, Dict, List, Optional
@@ -331,9 +332,20 @@ def list_documentos(conn, estado=None, centro_id=None, tipo=None, cuenta_id=None
     if periodo:
         q += " AND d.periodo=?"; params.append(int(periodo))
     if texto:
-        like = f"%{texto}%"
-        q += " AND (d.numero LIKE ? OR d.tercero LIKE ? OR d.concepto LIKE ?)"
-        params += [like, like, like]
+        # varios términos con "o"/"OR"/"|"/";" -> coincide CUALQUIERA (OR).
+        # Un solo término -> búsqueda simple. Busca en nº, tercero y concepto.
+        partes = [p.strip() for p in re.split(r"\s+o\s+|\s+OR\s+|[|;]", texto) if p.strip()]
+        if len(partes) > 1:
+            grupos = []
+            for parte in partes:
+                like = f"%{parte}%"
+                grupos.append("(d.numero LIKE ? OR d.tercero LIKE ? OR d.concepto LIKE ?)")
+                params += [like, like, like]
+            q += " AND (" + " OR ".join(grupos) + ")"
+        else:
+            like = f"%{texto}%"
+            q += " AND (d.numero LIKE ? OR d.tercero LIKE ? OR d.concepto LIKE ?)"
+            params += [like, like, like]
     if fecha_desde:
         q += " AND d.fecha >= ?"; params.append(fecha_desde)
     if fecha_hasta:

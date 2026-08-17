@@ -50,6 +50,12 @@
         </select>
       </div>
     </div>
+    <div class="form-row">
+      <div style="flex:1"><label>Buscar en el concepto, nº o proveedor</label>
+        <input type="text" name="texto" value="{{ filtro.texto or '' }}"
+               placeholder="Ej.: finca o postura tomate  (varios términos con «o» = cualquiera)">
+      </div>
+    </div>
     <div class="actions" style="margin-top:12px"><button class="btn" type="submit">Filtrar</button></div>
   </form>
 </div>
