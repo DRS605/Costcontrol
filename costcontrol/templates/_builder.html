@@ -1,0 +1,90 @@
+{# Constructor guiado de reparto: filas de destino (proyecto, partida, tipo,
+   valor) que se traducen a la sintaxis del motor y se vuelcan en `target_id`.
+   Uso:  {% import "_builder.html" as bld %}  {{ bld.builder(proyectos, partidas, "texto", true) }} #}
+{% macro builder(proyectos, partidas, target_id, con_preview=false) %}
+<div class="card builder-card">
+  <div class="actions" style="justify-content:space-between; align-items:center">
+    <h2 style="margin:0">🧩 Constructor guiado</h2>
+    <span class="small muted">Sin escribir códigos</span>
+  </div>
+  <p class="small muted" style="margin-top:4px">Añade a dónde va el gasto (proyecto, partida y cuánto). Se traduce solo al reparto.</p>
+  <div class="table-wrap">
+  <table class="builder-table">
+    <thead><tr><th style="width:30%">Proyecto</th><th style="width:28%">Partida</th><th>Reparto</th><th style="width:120px">Valor</th><th></th></tr></thead>
+    <tbody id="bld-rows-{{ target_id }}"></tbody>
+  </table>
+  </div>
+  <div class="actions" style="margin-top:10px; flex-wrap:wrap; gap:8px">
+    <button type="button" class="btn sec sm" onclick="bldAddRow_{{ target_id }}()">+ Añadir destino</button>
+    <button type="button" class="btn sec sm" onclick="bldEqual_{{ target_id }}()">A partes iguales</button>
+    <button type="button" class="btn accent sm" style="margin-left:auto" onclick="bldApply_{{ target_id }}()">Generar reparto ⬇</button>
+  </div>
+</div>
+
+<script>
+(function(){
+  const PROY = {{ proyectos|tojson }};
+  const PART = {{ partidas|tojson }};
+  const TARGET = {{ target_id|tojson }};
+  const tbody = document.getElementById('bld-rows-' + TARGET);
+
+  function optionList(){
+    let o = '<option value="">— proyecto —</option>';
+    PROY.forEach(p => o += `<option value="${p.codigo}">${p.codigo} · ${(p.nombre||'').replace(/"/g,'')}</option>`);
+    return o;
+  }
+  function partList(){
+    let o = '<option value="">— sin partida —</option>';
+    PART.forEach(p => o += `<option value="${(p.nombre||p.codigo)}">${p.codigo} · ${(p.nombre||'')}</option>`);
+    return o;
+  }
+  window['bldAddRow_'+TARGET] = function(){
+    const tr = document.createElement('tr');
+    tr.innerHTML =
+      `<td><select class="b-proy">${optionList()}</select></td>`
+      + `<td><select class="b-part">${partList()}</select></td>`
+      + `<td><select class="b-tipo" onchange="this.closest('tr').querySelector('.b-val').disabled=(this.value==='resto')">`
+        + `<option value="porcentaje">Porcentaje %</option><option value="importe">Importe €</option><option value="resto">Resto</option></select></td>`
+      + `<td><input class="b-val" type="text" placeholder="0" inputmode="decimal"></td>`
+      + `<td><button type="button" class="btn sec sm" onclick="this.closest('tr').remove()">✕</button></td>`;
+    tbody.appendChild(tr);
+  };
+  window['bldEqual_'+TARGET] = function(){
+    const rows = [...tbody.querySelectorAll('tr')];
+    if(!rows.length){ window['bldAddRow_'+TARGET](); window['bldAddRow_'+TARGET](); }
+    const rr = [...tbody.querySelectorAll('tr')];
+    const pct = (100/rr.length);
+    rr.forEach((tr,i)=>{
+      tr.querySelector('.b-tipo').value='porcentaje';
+      tr.querySelector('.b-val').disabled=false;
+      // reparte el redondeo en la última fila
+      tr.querySelector('.b-val').value = (i===rr.length-1 ? (100-pct*(rr.length-1)) : pct).toFixed(2).replace('.',',');
+    });
+  };
+  window['bldApply_'+TARGET] = function(){
+    const parts = [];
+    tbody.querySelectorAll('tr').forEach(tr=>{
+      const cod = tr.querySelector('.b-proy').value;
+      if(!cod) return;
+      const part = tr.querySelector('.b-part').value;
+      const tipo = tr.querySelector('.b-tipo').value;
+      const val = (tr.querySelector('.b-val').value||'').trim();
+      let frag = '';
+      if(tipo==='resto') frag = 'resto ' + cod;
+      else if(tipo==='importe') frag = val + ' € ' + cod;
+      else frag = val + '% ' + cod;
+      if(part) frag += ' en la partida ' + part;
+      parts.push(frag);
+    });
+    const ta = document.getElementById(TARGET);
+    if(ta){ ta.value = parts.join(', '); ta.dispatchEvent(new Event('input')); }
+    {% if con_preview %}
+    const btn = document.getElementById('btn-preview');
+    if(btn) btn.click();
+    {% endif %}
+  };
+  // arranca con dos filas para que se vea el patrón
+  window['bldAddRow_'+TARGET](); window['bldAddRow_'+TARGET]();
+})();
+</script>
+{% endmacro %}

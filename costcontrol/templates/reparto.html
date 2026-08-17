@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% import "_builder.html" as bld %}
 {% block title %}Reparto · {{ doc.numero or doc.id }}{% endblock %}
 {% block body %}
 <div class="actions" style="justify-content:space-between">
@@ -26,10 +27,14 @@
 <div class="flash error">🔒 Este documento está en un <b>periodo cerrado</b>. No se puede modificar su reparto. Reábrelo en <a href="{{ url_for('presupuestos', ejercicio=doc.ejercicio) }}">Presupuestos y cierre</a> si necesitas cambiarlo.</div>
 {% endif %}
 
+{% if not cerrado and proyectos %}
+{{ bld.builder(proyectos, partidas or [], "texto", true) }}
+{% endif %}
+
 <div class="split">
   <div class="card">
     <div class="actions" style="justify-content:space-between; align-items:center; margin-bottom:4px">
-      <h2 style="margin:0">Escribe el reparto como lo dirías</h2>
+      <h2 style="margin:0">…o escríbelo como lo dirías</h2>
       {% if ia_activa %}
       <span class="badge b-ok" title="La IA traduce frases libres a un reparto exacto.">✨ IA activa</span>
       {% else %}

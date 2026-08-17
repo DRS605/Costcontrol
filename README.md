@@ -56,6 +56,10 @@ herramienta traduce ese texto libre a líneas analíticas concretas.
 
   Cada reparto muestra una **traducción legible** de lo interpretado y avisa si
   algo no cuadra (queda importe sin repartir, se pasa del total, etc.).
+- 🧩 **Constructor guiado**: si prefieres no escribir, un cuadro con filas de
+  destino (proyecto, partida y cuánto: %, importe o resto) arma el reparto por ti
+  —sin teclear códigos— y lo traduce al instante. Disponible en el reparto de un
+  documento y en el reparto masivo.
 - 🤖 **Intérprete con IA (opcional).** El motor anterior funciona **100 % en
   local**. Si además activas la IA, CostControl entiende frases mucho más libres
   —*«la mitad para la nave y el resto repártelo entre los demás según las horas»*—

@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% import "_builder.html" as bld %}
 {% block title %}Reparto masivo · CostControl{% endblock %}
 {% block body %}
 <h1>Reparto masivo</h1>
@@ -92,9 +93,10 @@
   </div>
 
   {% if documentos %}
+  {% if proyectos %}{{ bld.builder(proyectos, partidas or [], "masivo-texto", false) }}{% endif %}
   <div class="card">
     <h2>3 · Escribe la regla y aplícala</h2>
-    <textarea name="texto" rows="2" placeholder="Ej.: a partes iguales entre {{ proyectos[:3] | map(attribute='codigo') | join(', ') }}"></textarea>
+    <textarea name="texto" id="masivo-texto" rows="2" placeholder="Ej.: a partes iguales entre {{ proyectos[:3] | map(attribute='codigo') | join(', ') }}"></textarea>
     <div class="pill-examples">
       <span class="pill" data-fill="a partes iguales entre {{ proyectos[:3] | map(attribute='codigo') | join(', ') }}">a partes iguales</span>
       <span class="pill" data-fill="según superficie">según superficie</span>
